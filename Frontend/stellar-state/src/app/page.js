@@ -4,6 +4,7 @@ import { DottedSurface } from "@/components/ui/dotted-surface";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import LoginPage from "@/components/ui/gaming-login";
+import { RobotModel } from "@/components/ui/robot-model";
 
 // Custom Card Component for Navy-Light Design System
 const GlassCard = ({ children, className = "", borderAccent = "" }) => (
@@ -28,7 +29,7 @@ export default function ZenOLandingPage() {
           <LoginPage.VideoBackground videoUrl="/hackbyte-bg.mp4" />
 
           <div className="relative z-20 w-full max-w-xl animate-in fade-in zoom-in-95 duration-300">
-            <LoginPage.LoginForm 
+            <LoginPage.LoginForm
               onSubmit={(email, password, remember) => {
                 console.log('Login attempt:', { email, password, remember });
                 setShowPopup(false);
@@ -65,34 +66,45 @@ export default function ZenOLandingPage() {
 
         <main>
           {/* 2. Hero Section */}
-          <section className="relative min-h-screen flex flex-col items-center justify-center py-20 px-6 text-center overflow-hidden">
+          <section className="relative min-h-screen flex items-center py-20 px-6 overflow-hidden">
             <DottedSurface className="absolute inset-0 z-0" />
 
-            <div className="relative z-10 max-w-7xl mx-auto flex flex-col items-center justify-center">
-              <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-8 text-[#00171f] leading-[1.1]">
-                Your Factory, Running at the <br className="hidden md:block" /> Speed of Thought
-              </h1>
+            <div className="relative z-10 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center pt-16">
 
-              <p className="text-lg md:text-xl text-[#00171f]/70 max-w-3xl mb-12">
-                India&apos;s 63 million factories still run on WhatsApp alerts and gut instinct. changes that - real-time AI-powered factory orchestration. <br className="hidden md:block" />
-                <span className="text-[#000000] font-semibold">Stellar-State</span> — real-time AI-powered factory orchestration.
-              </p>
+              {/* Left Column: Text & CTA */}
+              <div className="flex flex-col items-start justify-center text-left select-none cursor-default">
+                <h1 className="text-5xl md:text-7xl lg:text-6xl xl:text-7xl font-bold tracking-tight mb-8 text-[#00171f] leading-[1.1]">
+                  Your Factory, Running at the <br className="hidden xl:block" /> Speed of Thought
+                </h1>
 
-              <div className="flex flex-col sm:flex-row items-center gap-4 mb-16">
-                <a href="#features" className="px-8 py-4 bg-[#000000] hover:bg-[#333333] text-white font-semibold rounded-xl transition-all duration-200 w-full sm:w-auto text-center shadow-[0_10px_25px_rgba(0,0,0,0.25)]">
-                  See How It Works
-                </a>
-                <a href="https://github.com/unknownmember4u/VeltrixLabs.git" className="px-8 py-4 border border-[#003459]/10 hover:border-[#000000]/50 text-[#00171f] font-semibold rounded-xl transition-all duration-200 w-full sm:w-auto bg-white/50 backdrop-blur-sm text-center">
-                  View on GitHub
-                </a>
+                <p className="text-lg md:text-xl text-[#00171f]/70 max-w-2xl mb-12">
+                  India&apos;s 63 million factories still run on WhatsApp alerts and gut instinct. changes that - real-time AI-powered factory orchestration. <br className="hidden xl:block" />
+                  <span className="text-[#000000] font-semibold">Stellar-State</span> — real-time AI-powered factory orchestration.
+                </p>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 mb-12 w-full sm:w-auto">
+                  <a href="#features" className="px-8 py-4 bg-[#000000] hover:bg-[#333333] text-white font-semibold rounded-xl transition-all duration-200 w-full sm:w-auto text-center shadow-[0_10px_25px_rgba(0,0,0,0.25)]">
+                    See How It Works
+                  </a>
+                  <a href="https://github.com/unknownmember4u/VeltrixLabs.git" className="px-8 py-4 border border-[#003459]/10 hover:border-[#000000]/50 text-[#00171f] font-semibold rounded-xl transition-all duration-200 w-full sm:w-auto bg-white/50 backdrop-blur-sm text-center">
+                    View on GitHub
+                  </a>
+                </div>
+
+                <div className="flex flex-wrap justify-start gap-4">
+                  {["< 5ms Latency", "90% Cost Reduction", "100% On-Premises AI"].map((stat) => (
+                    <div key={stat} className="px-4 py-2 bg-white/60 border border-[#003459]/10 rounded-full text-[#00171f]/60 text-sm shadow-sm backdrop-blur-sm border-white/20">
+                      {stat}
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="flex flex-wrap justify-center gap-4">
-                {["< 5ms Latency", "90% Cost Reduction", "100% On-Premises AI"].map((stat) => (
-                  <div key={stat} className="px-4 py-2 bg-white/60 border border-[#003459]/10 rounded-full text-[#00171f]/60 text-sm shadow-sm backdrop-blur-sm">
-                    {stat}
-                  </div>
-                ))}
+              {/* Right Column: 3D Model */}
+              <div className="relative w-full h-full flex items-center justify-center">
+                {/* A subtle glow behind the robot to make it pop against the dotted grid */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/5 to-blue-500/5 rounded-full filter blur-[100px] z-0 animate-pulse duration-1000" />
+                <RobotModel className="z-10" />
               </div>
             </div>
           </section>
@@ -143,19 +155,19 @@ export default function ZenOLandingPage() {
                   <span className="text-[#000000] font-mono text-xs tracking-widest uppercase opacity-70">Architecture</span>
                   <span className="text-[#000000] text-sm font-bold bg-white/50 px-2 py-1 rounded border border-black/5">&lt; 5ms</span>
                 </div>
-                
+
                 <div className="flex flex-col items-center gap-6">
                   {/* Sensor Node */}
                   <div className="w-full py-4 px-6 bg-white border border-[#000000]/10 rounded-xl text-center font-bold text-[#00171f] shadow-sm transform transition-transform hover:scale-[1.02] duration-300">
                     IoT Sensor Network
                   </div>
-                  
+
                   {/* Connection Arrow */}
                   <div className="flex flex-col items-center -my-2">
                     <div className="w-px h-8 bg-gradient-to-b from-[#000000]/20 to-[#000000]"></div>
                     <div className="text-xs font-bold text-[#000000]">DIRECT</div>
                   </div>
-                  
+
                   {/* Central Reducer */}
                   <div className="w-full py-8 px-6 bg-[#000000] text-white rounded-2xl text-center shadow-[0_20px_50px_rgba(0,0,0,0.4)] relative group overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
@@ -164,7 +176,7 @@ export default function ZenOLandingPage() {
                       <div className="font-bold text-lg">SpacetimeDB Reducer</div>
                     </div>
                   </div>
-                  
+
                   {/* Clients */}
                   <div className="grid grid-cols-3 gap-3 w-full mt-2">
                     {["Client A", "Client B", "Client C"].map((client) => (
