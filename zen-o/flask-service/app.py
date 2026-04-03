@@ -20,6 +20,7 @@ DEBUG_MODE = os.getenv("DEBUG", "false").lower() == "true"
 CHROMADB_PATH = os.getenv("CHROMADB_PATH", "./chromadb_data")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 SPACETIMEDB_HOST = os.getenv("SPACETIMEDB_HOST", "http://localhost:3000")
+SPACETIMEDB_MODULE = os.getenv("SPACETIMEDB_MODULE", "stellar-state-k7z98")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 app = Flask(__name__)
@@ -126,7 +127,7 @@ if GEMINI_API_KEY:
 def call_spacetimedb(reducer_name, args):
     """Fire-and-forget call to a SpacetimeDB reducer."""
     try:
-        url = f"{SPACETIMEDB_HOST}/database/call/zen_o/{reducer_name}"
+        url = f"{SPACETIMEDB_HOST}/database/call/{SPACETIMEDB_MODULE}/{reducer_name}"
         requests.post(url, json=args, timeout=5)
     except Exception as e:
         print(f"SpacetimeDB call to {reducer_name} failed: {e}")
