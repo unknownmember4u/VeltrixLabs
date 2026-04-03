@@ -1,0 +1,7 @@
+flask
+flask-cors
+pymupdf
+chromadb
+sentence-transformers
+requests
+python-dotenv

@@ -1,0 +1,15 @@
+[package]
+name = "zen-o-module"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+spacetimedb = "0.10"
+sha2 = "0.10"
+serde = { version = "1", features = ["derive"] }
+
+[profile.release]
+opt-level = "s"
