@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 :root {
   --background: #faf9f6;
@@ -9,8 +10,8 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-serif: "Playfair Display", serif;
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-poppins);
+  --font-mono: var(--font-poppins);
 }
 
 html {
@@ -38,7 +39,6 @@ body {
 .btn-12 {
   -webkit-tap-highlight-color: transparent;
   -webkit-appearance: button;
-  appearance: button;
   background-color: #000;
   background-image: none;
   color: #fff;
@@ -51,7 +51,6 @@ body {
   line-height: 1.5;
   margin: 0;
   -webkit-mask-image: -webkit-radial-gradient(#000, #fff);
-  mask-image: radial-gradient(#000, #fff);
   padding: 0;
   text-transform: uppercase;
 }
@@ -83,19 +82,17 @@ body {
 
 .btn-12 span {
   mix-blend-mode: difference;
-  position: relative;
-  z-index: 10;
 }
 
 .btn-12:after,
 .btn-12:before {
   background: linear-gradient(
     90deg,
-    #00171f 25%,
+    #fff 25%,
     transparent 0,
     transparent 50%,
-    #00171f 0,
-    #00171f 75%,
+    #fff 0,
+    #fff 75%,
     transparent 0
   );
   content: "";
@@ -111,11 +108,11 @@ body {
     90deg,
     transparent 0,
     transparent 25%,
-    #00171f 0,
-    #00171f 50%,
+    #fff 0,
+    #fff 50%,
     transparent 0,
     transparent 75%,
-    #00171f 0
+    #fff 0
   );
   z-index: -1;
 }

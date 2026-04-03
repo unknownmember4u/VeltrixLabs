@@ -1,0 +1,18 @@
+﻿
+> stellar-state@0.1.0 lint
+> eslint
+
+
+E:\HackByte-4.0\HackByte-4.0-VeltrixLabs\Frontend\stellar-state\src\app\layout.js
+  72:9  warning  Custom fonts not added in `pages/_document.js` will only load for a single page. This is discouraged. See: https://nextjs.org/docs/messages/no-page-custom-font  @next/next/no-page-custom-font
+
+E:\HackByte-4.0\HackByte-4.0-VeltrixLabs\Frontend\stellar-state\src\app\page.js
+   50:22  error  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+  137:15  error  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+  137:77  error  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+
+E:\HackByte-4.0\HackByte-4.0-VeltrixLabs\Frontend\stellar-state\src\components\ui\dotted-surface.js
+  153:27  warning  The ref value 'containerRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'containerRef.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+
+Γ£û 5 problems (3 errors, 2 warnings)
+
