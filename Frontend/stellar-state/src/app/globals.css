@@ -1,25 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #faf9f6;
-  --foreground: #00171f;
-}
-
-@keyframes aurora {
-  from {
-    background-position: 50% 50%, 50% 50%;
-  }
-  to {
-    background-position: 350% 50%, 350% 50%;
-  }
+  --background: #0a0a0a;
+  --foreground: #ffffff;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --font-serif: "Playfair Display", serif;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --animate-aurora: aurora 60s linear infinite;
 }
 
 html {

@@ -4,7 +4,13 @@ import json
 import base64
 import fitz  # PyMuPDF
 import requests
-import chromadb
+try:
+    import chromadb
+    CHROMADB_AVAILABLE = True
+except Exception as e:
+    print(f"⚠ ChromaDB import failed ({e}), using in-memory fallback")
+    CHROMADB_AVAILABLE = False
+
 import google.generativeai as genai
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -30,13 +36,48 @@ CORS(app)
 
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-chroma_client = chromadb.Client(chromadb.Settings(
-    chroma_db_impl="duckdb+parquet",
-    persist_directory=CHROMADB_PATH,
-    anonymized_telemetry=False,
-))
+# ─── ChromaDB / In-Memory Fallback ─────────────────────────────────────
 
-collection = chroma_client.get_or_create_collection(name="factory_manuals")
+# In-memory store for when ChromaDB fails
+_memory_store = {"documents": [], "embeddings": [], "ids": [], "metadatas": []}
+
+if CHROMADB_AVAILABLE:
+    try:
+        chroma_client = chromadb.Client(chromadb.Settings(
+            persist_directory=CHROMADB_PATH,
+            anonymized_telemetry=False,
+        ))
+        collection = chroma_client.get_or_create_collection(name="factory_manuals")
+        print("✓ ChromaDB initialized successfully")
+    except Exception as e:
+        print(f"⚠ ChromaDB Settings init failed ({e}), using in-memory fallback")
+        CHROMADB_AVAILABLE = False
+        collection = None
+else:
+    collection = None
+
+import numpy as np
+
+
+def _cosine_sim(a, b):
+    """Cosine similarity between two vectors."""
+    a, b = np.array(a), np.array(b)
+    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-9))
+
+
+def memory_query(query_embedding, n_results=3):
+    """In-memory fallback for ChromaDB query using cosine similarity."""
+    if not _memory_store["embeddings"]:
+        return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
+
+    scores = [_cosine_sim(query_embedding, emb) for emb in _memory_store["embeddings"]]
+    ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:n_results]
+
+    return {
+        "documents": [[_memory_store["documents"][i] for i in ranked]],
+        "metadatas": [[_memory_store["metadatas"][i] for i in ranked]],
+        "distances": [[1 - scores[i] for i in ranked]],
+    }
 
 
 def chunk_text(text, max_chars=300):
@@ -59,10 +100,14 @@ def chunk_text(text, max_chars=300):
 
 
 def ingest_pdfs():
-    """Scan ./manuals/ for PDFs and load into ChromaDB."""
-    existing = collection.count()
-    if existing > 0:
-        print(f"ChromaDB already has {existing} chunks — skipping re-ingestion.")
+    """Scan ./manuals/ for PDFs and load into ChromaDB or memory store."""
+    if CHROMADB_AVAILABLE and collection is not None:
+        existing = collection.count()
+        if existing > 0:
+            print(f"ChromaDB already has {existing} chunks — skipping re-ingestion.")
+            return
+    elif _memory_store["documents"]:
+        print(f"Memory store already has {len(_memory_store['documents'])} chunks — skipping.")
         return
 
     manuals_dir = os.path.join(os.path.dirname(__file__), "manuals")
@@ -103,15 +148,25 @@ def ingest_pdfs():
 
     if all_chunks:
         embeddings = embedding_model.encode(all_chunks).tolist()
-        collection.add(
-            documents=all_chunks,
-            embeddings=embeddings,
-            ids=all_ids,
-            metadatas=all_metadatas,
-        )
-        chroma_client.persist()
 
-    print(f"Loaded {pdf_count} PDFs, {len(all_chunks)} chunks into ChromaDB")
+        if CHROMADB_AVAILABLE and collection is not None:
+            collection.add(
+                documents=all_chunks,
+                embeddings=embeddings,
+                ids=all_ids,
+                metadatas=all_metadatas,
+            )
+            try:
+                chroma_client.persist()
+            except Exception:
+                pass  # persist() removed in newer chromadb versions
+        else:
+            _memory_store["documents"] = all_chunks
+            _memory_store["embeddings"] = embeddings
+            _memory_store["ids"] = all_ids
+            _memory_store["metadatas"] = all_metadatas
+
+    print(f"Loaded {pdf_count} PDFs, {len(all_chunks)} chunks into {'ChromaDB' if CHROMADB_AVAILABLE else 'memory store'}")
 
 
 # Run ingestion at startup
@@ -147,21 +202,30 @@ def diagnose():
         energy_kw = data["energy_kw"]
         anomaly_type = data.get("anomaly_type", "unknown")
 
-        # Step 1: Query ChromaDB
+        # Step 1: Query ChromaDB / memory store
         query_text = f"{anomaly_type} maintenance repair troubleshooting"
         source_pages = []
         manual_sections = ""
 
-        if collection.count() > 0:
+        has_data = False
+        if CHROMADB_AVAILABLE and collection is not None:
+            has_data = collection.count() > 0
+        else:
+            has_data = len(_memory_store["documents"]) > 0
+
+        if has_data:
             query_embedding = embedding_model.encode([query_text]).tolist()
-            results = collection.query(
-                query_embeddings=query_embedding,
-                n_results=3,
-            )
+            if CHROMADB_AVAILABLE and collection is not None:
+                results = collection.query(
+                    query_embeddings=query_embedding,
+                    n_results=3,
+                )
+            else:
+                results = memory_query(query_embedding[0], n_results=3)
             if results and results["documents"] and results["documents"][0]:
                 for i, doc in enumerate(results["documents"][0]):
                     manual_sections += f"\n{doc}\n"
-                source_pages = results["ids"][0] if results["ids"] else []
+                source_pages = results.get("ids", [[]])[0] if "ids" in results else []
         else:
             manual_sections = "No manual data available."
 
@@ -367,7 +431,10 @@ def health():
         # ChromaDB
         chromadb_chunks = 0
         try:
-            chromadb_chunks = collection.count()
+            if CHROMADB_AVAILABLE and collection is not None:
+                chromadb_chunks = collection.count()
+            else:
+                chromadb_chunks = len(_memory_store["documents"])
         except Exception:
             pass
 
