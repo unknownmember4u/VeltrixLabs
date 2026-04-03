@@ -1,7 +1,9 @@
 flask
 flask-cors
 pymupdf
-chromadb
+numpy<2
+chromadb==0.4.24
 sentence-transformers
 requests
 python-dotenv
+google-generativeai
