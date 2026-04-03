@@ -30,7 +30,7 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet" />
       </head>
-      <body className="min-h-full flex flex-col bg-[#0a0a0a] text-white" suppressHydrationWarning>
+      <body className="min-h-full flex flex-col bg-[#faf9f6] text-[#00171f]" suppressHydrationWarning>
         {children}
       </body>
     </html>
