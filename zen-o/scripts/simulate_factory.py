@@ -27,7 +27,7 @@ import os
 # ─── CONFIG ────────────────────────────────────────────────────────────
 
 SPACETIME_CLI = os.path.expanduser("~/.local/bin/spacetime")
-MODULE_NAME   = "stellar-state-k7z98"
+MODULE_NAME   = "zen-o-final"
 HOST          = "local"
 
 # Simulation parameters

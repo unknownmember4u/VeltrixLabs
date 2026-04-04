@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { DbConnection, SubscriptionBuilder } from "./module_bindings";
 
 const SPACETIMEDB_URI = "ws://localhost:3000";
-const MODULE_NAME = "stellar-state-k7z98";
+const MODULE_NAME = "zen-o-final";
 
 let conn = null;
 const store = {
@@ -66,14 +66,14 @@ function initSpacetimeDB() {
           continue;
         }
         if (table.onInsert) {
-          table.onInsert((ctx, row) => { 
-            store.notify(); 
+          table.onInsert((ctx, row) => {
+            store.notify();
             pushLog(`[${tableName.toUpperCase()}] Inserted new record via ${ctx?.sender || 'backend'}`);
           });
         }
         if (table.onUpdate) {
-          table.onUpdate((ctx, oldRow, newRow) => { 
-            store.notify(); 
+          table.onUpdate((ctx, oldRow, newRow) => {
+            store.notify();
             // Optional: don't clog up screen with hundreds of sensor temp updates unless it's a big event, 
             // but user asked for "continuous logs", so we will log it.
             pushLog(`[${tableName.toUpperCase()}] Updated record`);
@@ -101,9 +101,20 @@ function initSpacetimeDB() {
       ]);
     })
     .onConnectError((ctx, error) => {
-      console.error("SpacetimeDB connect error", error);
+      console.error("SpacetimeDB connect error — possible identity mismatch. Resetting token and retrying...", error);
+      // Clear SDK identity/token from localStorage to force fresh connection
+      try {
+        localStorage.removeItem("spacetimedb-auth-token-zen-o-final");
+        localStorage.removeItem("spacetimedb-identity-zen-o-final");
+        // Also clear any global spacetimedb storage just in case
+        Object.keys(localStorage).forEach(k => { if (k.includes('spacetimedb')) localStorage.removeItem(k); });
+      } catch (e) { }
+
       store.connectionStatus = "error";
       store.notifyImmediate();
+
+      // Auto-reconnect after 3s
+      setTimeout(() => { conn = null; initSpacetimeDB(); }, 3000);
     })
     .onDisconnect((ctx, error) => {
       console.log("Disconnected from SpacetimeDB", error);
@@ -126,14 +137,14 @@ function useStoreSelector(selector, defaultValue) {
     if (conn && conn.db) {
       try {
         setValue(selectorRef.current());
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const unsub = store.subscribe(() => {
       if (conn && conn.db) {
         try {
           setValue(selectorRef.current());
-        } catch (e) {}
+        } catch (e) { }
       }
     });
 

@@ -3,21 +3,23 @@
 
 import { useState } from "react";
 import { useRobots, callReducer } from "../lib/spacetime";
+import { Zap, Bot, Check, Thermometer, Activity, MapPin, CheckCircle, PauseCircle } from "lucide-react";
 
 // ─── STATUS HELPERS ───────────────────────────────────────────────────
 
 function StatusDot({ status }) {
   if (status === "active")
-    return <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />;
+    return <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />;
   if (status === "fault")
-    return <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />;
-  return <span className="inline-block w-2.5 h-2.5 rounded-full bg-gray-500" />;
+    return <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]" />;
+  return <span className="inline-block w-2.5 h-2.5 rounded-full bg-gray-400" />;
 }
 
 function ZoneBadge({ zone }) {
-  const color = zone === "Zone-A" ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-purple-500/20 text-purple-400 border-purple-500/30";
+  const color = zone === "Zone-A" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-purple-50 text-purple-600 border-purple-200";
   return (
-    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${color} font-mono`}>
+    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${color} font-mono flex items-center gap-1`}>
+      <MapPin className="w-3 h-3" />
       {zone}
     </span>
   );
@@ -29,9 +31,9 @@ function TempBar({ temp }) {
   const pct = Math.min(100, Math.max(0, ((temp - 40) / 60) * 100));
   const color = temp < 70 ? "bg-green-500" : temp <= 85 ? "bg-amber-500" : "bg-red-500";
   return (
-    <div className="relative w-full h-4 bg-gray-700 rounded-full overflow-hidden">
+    <div className="relative w-full h-4 bg-gray-200 rounded-full overflow-hidden shadow-inner">
       <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${pct}%` }} />
-      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-white drop-shadow">
+      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-gray-900 font-semibold mix-blend-overlay">
         {temp.toFixed(1)}°C
       </span>
     </div>
@@ -42,9 +44,9 @@ function VibrationBar({ value }) {
   const pct = Math.min(100, Math.max(0, value * 100));
   const color = value < 0.6 ? "bg-green-500" : value <= 0.8 ? "bg-amber-500" : "bg-red-500";
   return (
-    <div className="relative w-full h-3 bg-gray-700 rounded-full overflow-hidden">
+    <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden shadow-inner">
       <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${pct}%` }} />
-      <span className="absolute inset-0 flex items-center justify-center text-[9px] font-mono text-white drop-shadow">
+      <span className="absolute inset-0 flex items-center justify-center text-[9px] font-mono text-gray-900 font-semibold mix-blend-overlay">
         {value.toFixed(2)}
       </span>
     </div>
@@ -96,35 +98,35 @@ function RobotModal({ robot, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <h3 className="text-lg font-mono font-bold text-white">{robot.name}</h3>
+            <h3 className="text-lg font-mono font-bold text-gray-900">{robot.name}</h3>
             <ZoneBadge zone={robot.zone} />
             <StatusDot status={robot.status} />
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-900 text-2xl leading-none">&times;</button>
         </div>
 
         {/* Robot details */}
         <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="bg-gray-900 rounded-lg p-3 text-center">
-            <p className="text-[10px] text-gray-400 uppercase">Temp</p>
-            <p className={`text-lg font-mono font-bold ${Number(robot.temperature) > 85 ? "text-red-400" : Number(robot.temperature) > 70 ? "text-amber-400" : "text-green-400"}`}>
+          <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-100">
+            <p className="text-[10px] text-gray-500 uppercase flex items-center justify-center gap-1"><Thermometer className="w-3 h-3"/> Temp</p>
+            <p className={`text-lg font-mono font-bold ${Number(robot.temperature) > 85 ? "text-red-500" : Number(robot.temperature) > 70 ? "text-amber-500" : "text-green-600"}`}>
               {Number(robot.temperature).toFixed(1)}°C
             </p>
           </div>
-          <div className="bg-gray-900 rounded-lg p-3 text-center">
-            <p className="text-[10px] text-gray-400 uppercase">Vibration</p>
-            <p className={`text-lg font-mono font-bold ${Number(robot.vibration) > 0.8 ? "text-red-400" : Number(robot.vibration) > 0.6 ? "text-amber-400" : "text-green-400"}`}>
+          <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-100">
+            <p className="text-[10px] text-gray-500 uppercase flex items-center justify-center gap-1"><Activity className="w-3 h-3"/> Vibrate</p>
+            <p className={`text-lg font-mono font-bold ${Number(robot.vibration) > 0.8 ? "text-red-500" : Number(robot.vibration) > 0.6 ? "text-amber-500" : "text-green-600"}`}>
               {Number(robot.vibration).toFixed(2)}
             </p>
           </div>
-          <div className="bg-gray-900 rounded-lg p-3 text-center">
-            <p className="text-[10px] text-gray-400 uppercase">Energy</p>
-            <p className="text-lg font-mono font-bold text-white">⚡ {Number(robot.energyKw).toFixed(1)} kW</p>
+          <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-100">
+            <p className="text-[10px] text-gray-500 uppercase flex items-center justify-center gap-1">Energy</p>
+            <p className="text-lg font-mono font-bold text-gray-900 flex items-center justify-center gap-1"><Zap className="w-4 h-4 text-amber-500" /> {Number(robot.energyKw).toFixed(1)} kW</p>
           </div>
         </div>
 
@@ -134,7 +136,7 @@ function RobotModal({ robot, onClose }) {
             <button
               onClick={getDiagnosis}
               disabled={loading}
-              className="w-full py-2.5 rounded-lg font-semibold text-sm transition-all bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white mb-3"
+              className="w-full py-2.5 rounded-lg font-semibold text-sm transition-all bg-blue-600 hover:bg-blue-700 shadow flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-white mb-3"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -144,7 +146,7 @@ function RobotModal({ robot, onClose }) {
                   </svg>
                   Analyzing...
                 </span>
-              ) : "🤖 Get AI Diagnosis"}
+              ) : <><Bot className="w-4 h-4" /> Get AI Diagnosis</>}
             </button>
 
             {diagnosis && (
@@ -160,9 +162,9 @@ function RobotModal({ robot, onClose }) {
                 {/* Resolve button after getting diagnosis */}
                 <button
                   onClick={handleResolve}
-                  className="mt-3 w-full py-2 rounded-lg text-xs font-semibold bg-green-600 hover:bg-green-500 text-white transition-colors"
+                  className="mt-3 w-full py-2 rounded-lg text-xs font-semibold bg-green-600 hover:bg-green-700 flex justify-center items-center gap-1.5 text-white shadow transition-colors"
                 >
-                  ✓ Apply Fix & Resolve Anomaly
+                  <Check className="w-4 h-4"/> Apply Fix & Resolve Anomaly
                 </button>
               </div>
             )}
@@ -184,11 +186,11 @@ function RobotModal({ robot, onClose }) {
 
         {/* Info for non-fault robots */}
         {!isFault && (
-          <div className="bg-gray-900 rounded-lg p-4 text-center">
-            <p className="text-sm text-gray-400">
-              {robot.status === "active" ? "🟢 Operating normally" : "⏸ Robot is idle"}
+          <div className="bg-gray-50 border border-gray-100 rounded-lg p-4 text-center flex flex-col items-center">
+            <p className="text-sm text-gray-700 font-medium flex items-center justify-center gap-2">
+              {robot.status === "active" ? <><CheckCircle className="w-4 h-4 text-green-500"/> Operating normally</> : <><PauseCircle className="w-4 h-4 text-gray-500"/> Robot is idle</>}
             </p>
-            <p className="text-[10px] text-gray-600 mt-1">
+            <p className="text-[10px] text-gray-500 mt-1">
               Last updated: {new Date(Number(robot.lastUpdated)).toLocaleTimeString()}
             </p>
           </div>
@@ -202,43 +204,50 @@ function RobotModal({ robot, onClose }) {
 
 function RobotCard({ robot, onClick }) {
   const isFault = robot.status === "fault";
-  const cardClass = isFault
-    ? "bg-gray-800 border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.2)] animate-[glow_2s_ease-in-out_infinite]"
-    : "bg-gray-800 border-gray-700 hover:border-gray-600";
+  
+  // Heat Map Effect directly integrated
+  let heatGradient = "bg-white border-gray-200 hover:border-gray-300"; // default
+  if (isFault) {
+    heatGradient = "bg-gradient-to-br from-red-50 to-orange-50 border-red-300 shadow-[0_0_15px_rgba(239,68,68,0.25)] animate-[glow_2s_ease-in-out_infinite]";
+  } else if (Number(robot.temperature) > 75 || Number(robot.vibration) > 0.6) {
+    heatGradient = "bg-gradient-to-br from-amber-50 to-orange-50 border-amber-300 hover:border-amber-400";
+  } else {
+    heatGradient = "bg-gradient-to-br from-white to-blue-50/40 border-gray-200 hover:border-blue-200";
+  }
 
   return (
     <div
-      className={`rounded-xl border p-4 transition-all cursor-pointer ${cardClass}`}
+      className={`rounded-xl border p-4 shadow-sm transition-all cursor-pointer ${heatGradient}`}
       onClick={() => onClick(robot)}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <span className="font-mono font-bold text-white text-sm">{robot.name}</span>
+        <span className="font-mono font-bold text-gray-900 text-sm">{robot.name}</span>
         <ZoneBadge zone={robot.zone} />
       </div>
 
       {/* Status */}
       <div className="flex items-center gap-2 mb-3">
         <StatusDot status={robot.status} />
-        <span className="text-xs text-gray-400 capitalize">{robot.status}</span>
+        <span className="text-xs text-gray-500 font-medium capitalize">{robot.status}</span>
       </div>
 
       {/* Temperature */}
-      <div className="mb-2">
-        <p className="text-[10px] text-gray-500 uppercase mb-1">Temperature</p>
+      <div className="mb-2 w-full">
+        <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1 flex items-center gap-1 hover:text-gray-500"><Thermometer className="w-3 h-3"/> Temperature</p>
         <TempBar temp={Number(robot.temperature)} />
       </div>
 
       {/* Vibration */}
-      <div className="mb-2">
-        <p className="text-[10px] text-gray-500 uppercase mb-1">Vibration</p>
+      <div className="mb-2 w-full">
+        <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1 flex items-center gap-1 hover:text-gray-500"><Activity className="w-3 h-3"/> Vibration</p>
         <VibrationBar value={Number(robot.vibration)} />
       </div>
 
       {/* Energy */}
-      <div className="flex items-center gap-1.5">
-        <span className="text-amber-400 text-sm">⚡</span>
-        <span className="font-mono text-sm text-white">{Number(robot.energyKw).toFixed(1)}</span>
+      <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-gray-200/50">
+        <Zap className="w-3.5 h-3.5 text-amber-500" />
+        <span className="font-mono text-sm font-semibold text-gray-800">{Number(robot.energyKw).toFixed(1)}</span>
         <span className="text-[10px] text-gray-500">kW</span>
       </div>
     </div>
@@ -258,12 +267,12 @@ export default function RobotGrid() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Robot Fleet</h2>
+      <div className="flex items-center justify-between mb-3 bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm">
+        <h2 className="text-sm font-semibold text-gray-800 uppercase tracking-wider flex items-center gap-2"><Bot className="w-4 h-4"/> Robot Fleet / Heat Map</h2>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500 font-mono">{robots.length} units</span>
+          <span className="text-xs text-gray-500 font-mono font-medium">{robots.length} units Active</span>
           {robots.filter((r) => r.status === "fault").length > 0 && (
-            <span className="text-[10px] font-mono font-bold text-red-400 bg-red-500/10 border border-red-500/30 px-2 py-0.5 rounded">
+            <span className="text-[10px] font-mono font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded shadow-sm">
               {robots.filter((r) => r.status === "fault").length} fault{robots.filter((r) => r.status === "fault").length > 1 ? "s" : ""}
             </span>
           )}

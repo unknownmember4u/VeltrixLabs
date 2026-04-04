@@ -8,94 +8,30 @@ import NavBar from "../components/NavBar";
 // Dynamic imports to avoid SSR issues with SpacetimeDB
 const RobotGrid = dynamic(() => import("../components/RobotGrid"), { ssr: false });
 const AnomalyConsole = dynamic(() => import("../components/AnomalyConsole"), { ssr: false });
-const HeatMap = dynamic(() => import("../components/HeatMap"), { ssr: false });
 const DatabaseStream = dynamic(() => import("../components/DatabaseStream"), { ssr: false });
 
 // ─── SKELETON LOADER ─────────────────────────────────────────────────
 
 function Skeleton({ className = "" }) {
-  return <div className={`bg-gray-800 rounded-xl animate-pulse ${className}`} />;
+  return <div className={`bg-gray-200 rounded-xl animate-pulse ${className}`} />;
 }
 
-// ─── HEADER ──────────────────────────────────────────────────────────
 
-function Header({ status, latencyMs, faultCount }) {
-  const isLive = status === "connected";
-
-  const handleEmergencyStop = async () => {
-    if (confirm("⚠ Trigger EMERGENCY STOP for all zones?")) {
-      await callReducer("emergency_stop", {
-        zone: "all",
-        reason: "Manual emergency stop",
-        operator_id: "operator-1",
-      });
-    }
-  };
-
-  return (
-    <header className="sticky top-0 z-40 bg-gray-900 border-b border-gray-800 px-4 py-3">
-      <div className="flex items-center justify-between max-w-[1600px] mx-auto">
-        {/* Left — Logo */}
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-mono font-bold text-white tracking-tight">ZEN-O</h1>
-          <span className="text-[10px] text-gray-500 uppercase tracking-wider hidden sm:block">
-            Smart Factory Orchestrator
-          </span>
-        </div>
-
-        {/* Center — Connection Status */}
-        <div className="flex items-center gap-2">
-          <span className={`inline-block w-2 h-2 rounded-full ${
-            isLive ? "bg-green-500 animate-pulse" : "bg-red-500"
-          }`} />
-          <span className={`text-xs font-mono font-semibold ${
-            isLive ? "text-green-400" : "text-red-400"
-          }`}>
-            {isLive ? "LIVE" : status === "connecting" ? "CONNECTING" : "OFFLINE"}
-          </span>
-        </div>
-
-        {/* Right — Latency + Faults + E-Stop */}
-        <div className="flex items-center gap-3">
-          {/* Latency */}
-          {isLive && (
-            <span className="text-[10px] font-mono text-gray-400 bg-gray-800 px-2 py-1 rounded">
-              {latencyMs}ms
-            </span>
-          )}
-
-          {/* Fault Count */}
-          {faultCount > 0 && (
-            <span className="text-[10px] font-mono font-bold text-white bg-red-600 px-2 py-1 rounded-full">
-              {faultCount} FAULT{faultCount > 1 ? "S" : ""}
-            </span>
-          )}
-
-          {/* Emergency Stop */}
-          <button
-            onClick={handleEmergencyStop}
-            className="bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors uppercase tracking-wider"
-          >
-            E-STOP
-          </button>
-        </div>
-      </div>
-    </header>
-  );
-}
 
 // ─── LIVE BADGE ──────────────────────────────────────────────────────
 
 function LiveBadge() {
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 bg-gray-900/90 backdrop-blur border border-gray-700 rounded-full px-3 py-1.5 shadow-lg">
-      <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-      <span className="text-[10px] font-mono font-bold text-green-400">LIVE</span>
+    <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 bg-white/80 backdrop-blur border border-green-200 rounded-full px-3 py-1.5 shadow-lg">
+      <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+      <span className="text-[10px] font-mono font-bold text-green-700 tracking-wider">LIVE SYNC</span>
     </div>
   );
 }
 
 // ─── MAIN PAGE ───────────────────────────────────────────────────────
+
+import { AlertCircle, CheckCircle2, ShieldAlert } from "lucide-react";
 
 export default function Home() {
   const { status, latencyMs } = useConnectionStatus();
@@ -104,37 +40,34 @@ export default function Home() {
   const faultCount = robots.filter((r) => r.status === "fault").length;
 
   return (
-    <div className="bg-gray-950 text-white min-h-screen">
+    <div className="bg-gray-50 text-gray-900 min-h-screen">
       <NavBar />
-      <div className="bg-gray-900 border-b border-gray-800 px-4 py-2">
+      <div className="bg-white border-b border-gray-200 px-4 py-2 shadow-sm relative z-30">
         <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <span className="text-xs text-gray-500 font-mono">
-              {faultCount > 0 ? `⚠ ${faultCount} fault${faultCount > 1 ? 's' : ''} detected` : '✓ All systems nominal'}
+            <span className="text-xs text-gray-600 font-mono font-medium flex items-center gap-2">
+              {faultCount > 0 ? <><AlertCircle className="w-4 h-4 text-red-500"/> <span className="text-red-600">{faultCount} fault{faultCount > 1 ? 's' : ''} detected</span></> : <><CheckCircle2 className="w-4 h-4 text-green-500"/> All systems nominal</>}
             </span>
-            <span className="text-[10px] text-green-400 font-mono border border-green-500/30 bg-green-500/10 px-2 py-0.5 rounded-full">
-              Edge AI (No Cloud): Local Ollama RAG active. Sensitive data never leaves the building.
+            <span className="text-[10px] text-green-700 font-mono font-medium border border-green-200 bg-green-50/80 px-2.5 py-0.5 rounded-full">
+              Edge AI (No Cloud): Local Ollama RAG active.
             </span>
           </div>
           <button
-            onClick={() => { if (confirm('⚠ Trigger EMERGENCY STOP for all zones?')) callReducer('emergency_stop', { zone: 'all', reason: 'Manual emergency stop', operator_id: 'operator-1' }); }}
-            className="bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors uppercase tracking-wider whitespace-nowrap"
+            onClick={() => { if (confirm('Trigger EMERGENCY STOP for all zones?')) callReducer('emergency_stop', { zone: 'all', reason: 'Manual emergency stop', operator_id: 'operator-1' }); }}
+            className="flex items-center gap-1.5 bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 hover:text-red-700 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors uppercase tracking-wider whitespace-nowrap shadow-sm"
           >
-            ⛔ E-STOP ALL ZONES
+            <ShieldAlert className="w-3.5 h-3.5" /> E-STOP ALL ZONES
           </button>
         </div>
       </div>
 
       <main className="p-4 space-y-4 max-w-[1600px] mx-auto">
-        {/* Row 1 — Robot Fleet & HeatMap */}
+        {/* Row 1 — Robot Fleet */}
         {isConnected ? (
-          <div className="space-y-4">
-            <RobotGrid />
-            <HeatMap />
-          </div>
+          <RobotGrid />
         ) : (
           <div className="space-y-3">
-            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-10 w-48" />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {Array.from({ length: 8 }).map((_, i) => (
                 <Skeleton key={i} className="h-52" />

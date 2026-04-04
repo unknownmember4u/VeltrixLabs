@@ -3,22 +3,23 @@
 
 import { useState } from "react";
 import { useAuditLog, useRobots, callReducer } from "../lib/spacetime";
+import { ShieldAlert, Link as LinkIcon, ActivitySquare } from "lucide-react";
 
 // ─── EVENT TYPE BADGE COLORS ──────────────────────────────────────────
 
 const EVENT_COLORS = {
-  ANOMALY_DETECTED: "bg-red-500/20 text-red-400 border-red-500/30",
-  ANOMALY_INJECTED: "bg-red-500/20 text-red-400 border-red-500/30",
-  ANOMALY_RESOLVED: "bg-green-500/20 text-green-400 border-green-500/30",
-  PO_AUTO_GENERATED: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  EMERGENCY_STOP: "bg-orange-500/20 text-orange-400 border-orange-500/30",
-  ENERGY_ALERT: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+  ANOMALY_DETECTED: "bg-red-50 text-red-600 border-red-200",
+  ANOMALY_INJECTED: "bg-red-50 text-red-600 border-red-200",
+  ANOMALY_RESOLVED: "bg-green-50 text-green-600 border-green-200",
+  PO_AUTO_GENERATED: "bg-blue-50 text-blue-600 border-blue-200",
+  EMERGENCY_STOP: "bg-orange-50 text-orange-600 border-orange-200",
+  ENERGY_ALERT: "bg-amber-50 text-amber-600 border-amber-200",
 };
 
 function EventBadge({ type }) {
-  const color = EVENT_COLORS[type] || "bg-gray-500/20 text-gray-400 border-gray-500/30";
+  const color = EVENT_COLORS[type] || "bg-gray-100 text-gray-600 border-gray-200";
   return (
-    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-mono whitespace-nowrap ${color}`}>
+    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-mono font-medium whitespace-nowrap ${color}`}>
       {type}
     </span>
   );
@@ -95,9 +96,9 @@ export default function AnomalyConsole() {
   };
 
   return (
-    <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 flex flex-col h-full">
-      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
-        Anomaly Console
+    <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col h-full shadow-sm">
+      <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+        <ActivitySquare className="w-4 h-4"/> Anomaly Console
       </h3>
 
       <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
@@ -108,7 +109,7 @@ export default function AnomalyConsole() {
               <p className="text-gray-500 text-sm text-center py-8">No audit entries yet</p>
             ) : (
               auditLogs.map((log) => (
-                <div key={`${log.id}-${log.timestamp}`} className="bg-gray-900 rounded-lg px-3 py-2 flex items-start gap-2">
+                <div key={`${log.id}-${log.timestamp}`} className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 flex items-start gap-2">
                   <span className="text-[10px] text-gray-500 font-mono whitespace-nowrap mt-0.5">
                     {formatTime(log.timestamp)}
                   </span>
@@ -119,10 +120,10 @@ export default function AnomalyConsole() {
                         <span className="text-[9px] text-gray-500 font-mono">ARM-{String(log.robotId).padStart(2, "0")}</span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-300 truncate" title={log.payload}>
+                    <p className="text-xs text-gray-700 font-medium truncate" title={log.payload}>
                       {log.payload.length > 60 ? log.payload.slice(0, 60) + "…" : log.payload}
                     </p>
-                    <p className="text-[9px] text-gray-600 font-mono mt-0.5">
+                    <p className="text-[9px] text-gray-400 font-mono mt-0.5">
                       #{log.hash.slice(0, 8)}
                     </p>
                   </div>
@@ -135,12 +136,12 @@ export default function AnomalyConsole() {
         {/* RIGHT — Controls */}
         <div className="lg:w-48 flex-shrink-0 space-y-4">
           {/* Inject Anomaly */}
-          <div>
-            <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">Inject Anomaly</p>
+          <div className="p-3 bg-gray-50 border border-gray-100 rounded-lg">
+            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-2">Inject Anomaly</p>
             <select
               value={selectedRobot}
               onChange={(e) => setSelectedRobot(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white mb-2 focus:outline-none focus:border-blue-500"
+              className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 mb-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             >
               <option value="">Select robot...</option>
               {robots.map((r) => (
@@ -153,7 +154,7 @@ export default function AnomalyConsole() {
             <select
               value={anomalyType}
               onChange={(e) => setAnomalyType(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white mb-2 focus:outline-none focus:border-blue-500"
+              className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 mb-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             >
               {anomalyTypes.map((t) => (
                 <option key={t} value={t}>{t.replace(/_/g, " ")}</option>
@@ -163,32 +164,32 @@ export default function AnomalyConsole() {
             <button
               onClick={handleInject}
               disabled={!selectedRobot || injecting}
-              className="w-full py-1.5 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+              className="w-full py-1.5 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-sm transition-colors flex items-center justify-center gap-1.5"
             >
-              {injecting ? "Injecting..." : "⚠ Inject"}
+              {injecting ? "Injecting..." : <><ShieldAlert className="w-3.5 h-3.5"/> Inject</>}
             </button>
           </div>
 
           {/* Hash Chain Verify */}
-          <div>
-            <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">Hash Chain</p>
+          <div className="p-3 bg-gray-50 border border-gray-100 rounded-lg">
+            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-2">Hash Chain</p>
             <button
               onClick={handleVerify}
               disabled={verifying || auditLogs.length === 0}
-              className="w-full py-1.5 rounded-lg text-xs font-semibold bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+              className="w-full py-1.5 rounded-lg text-xs font-semibold bg-gray-800 hover:bg-gray-900 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors flex justify-center items-center gap-1.5"
             >
-              {verifying ? "Verifying..." : "🔗 Verify Chain"}
+              {verifying ? "Verifying..." : <><LinkIcon className="w-3.5 h-3.5"/> Verify Chain</>}
             </button>
 
             {hashResult && (
-              <div className={`mt-2 p-2 rounded-lg text-xs font-mono ${
+              <div className={`mt-2 p-2 rounded-lg text-[10px] font-mono shadow-sm ${
                 hashResult.valid
-                  ? "bg-green-500/10 border border-green-500/30 text-green-400"
-                  : "bg-red-500/10 border border-red-500/30 text-red-400"
+                  ? "bg-green-50 border border-green-200 text-green-700"
+                  : "bg-red-50 border border-red-200 text-red-700"
               }`}>
                 {hashResult.valid
-                  ? `✓ Chain Intact (${hashResult.total} entries verified)`
-                  : `✗ Chain broken at entry #${hashResult.brokenAt}`}
+                  ? `✓ Chain Intact (${hashResult.total} verified)`
+                  : `✗ Chain broken at #${hashResult.brokenAt}`}
               </div>
             )}
           </div>

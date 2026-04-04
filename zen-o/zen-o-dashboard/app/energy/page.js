@@ -13,6 +13,17 @@ const Tooltip         = dynamic(() => import("recharts").then((m) => m.Tooltip),
 const ResponsiveContainer = dynamic(() => import("recharts").then((m) => m.ResponsiveContainer), { ssr: false });
 import { useState } from "react";
 const Cell            = dynamic(() => import("recharts").then((m) => m.Cell),              { ssr: false });
+import { 
+  ShieldAlert, 
+  AlertTriangle, 
+  RotateCcw, 
+  Activity, 
+  Zap, 
+  ChevronRight, 
+  BarChart3, 
+  Map as MapIcon, 
+  Table as TableIcon 
+} from "lucide-react";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -39,33 +50,33 @@ function ZoneMap({ robots }) {
   const avgB  = zoneB.length ? zoneB.reduce((s, r) => s + Number(r.energyKw), 0) / zoneB.length : 0;
 
   return (
-    <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-4">
-      <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
-        Zone Energy Map
+    <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm">
+      <h2 className="text-sm font-bold text-gray-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+        <MapIcon className="w-4 h-4 text-blue-600" /> Zone Energy Map
       </h2>
       <div className="overflow-x-auto">
         <svg viewBox="0 0 700 160" className="w-full max-w-2xl" style={{ height: 160 }}>
           {/* Zone A */}
-          <rect x="20" y="20" width="310" height="120" rx="12" fill={zoneColor(avgA)} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-          <text x="175" y="65" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold" fontFamily="monospace">
+          <rect x="20" y="20" width="310" height="120" rx="12" fill={zoneColor(avgA)} stroke="#e5e7eb" strokeWidth="1" />
+          <text x="175" y="65" textAnchor="middle" fill="#111827" fontSize="14" fontWeight="bold" fontFamily="monospace">
             Zone-A
           </text>
-          <text x="175" y="90" textAnchor="middle" fill="#94a3b8" fontSize="12" fontFamily="monospace">
+          <text x="175" y="90" textAnchor="middle" fill="#4b5563" fontSize="12" fontFamily="monospace">
             {fmt2(avgA)} kW avg
           </text>
-          <text x="175" y="112" textAnchor="middle" fill="#64748b" fontSize="11" fontFamily="monospace">
+          <text x="175" y="112" textAnchor="middle" fill="#6b7280" fontSize="11" fontFamily="monospace">
             {zoneA.length} robots
           </text>
 
           {/* Zone B */}
-          <rect x="370" y="20" width="310" height="120" rx="12" fill={zoneColor(avgB)} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-          <text x="525" y="65" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold" fontFamily="monospace">
+          <rect x="370" y="20" width="310" height="120" rx="12" fill={zoneColor(avgB)} stroke="#e5e7eb" strokeWidth="1" />
+          <text x="525" y="65" textAnchor="middle" fill="#111827" fontSize="14" fontWeight="bold" fontFamily="monospace">
             Zone-B
           </text>
-          <text x="525" y="90" textAnchor="middle" fill="#94a3b8" fontSize="12" fontFamily="monospace">
+          <text x="525" y="90" textAnchor="middle" fill="#4b5563" fontSize="12" fontFamily="monospace">
             {fmt2(avgB)} kW avg
           </text>
-          <text x="525" y="112" textAnchor="middle" fill="#64748b" fontSize="11" fontFamily="monospace">
+          <text x="525" y="112" textAnchor="middle" fill="#6b7280" fontSize="11" fontFamily="monospace">
             {zoneB.length} robots
           </text>
         </svg>
@@ -84,25 +95,25 @@ function RobotBarChart({ robots }) {
   const CustomTooltip = ({ active, payload }) => {
     if (!active || !payload?.length) return null;
     return (
-      <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs font-mono">
-        <p className="text-white font-bold">{payload[0].payload.name}</p>
-        <p className="text-amber-400">{payload[0].value} kW</p>
+      <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono shadow-lg">
+        <p className="text-gray-900 font-bold">{payload[0].payload.name}</p>
+        <p className="text-blue-600 font-bold">{payload[0].value.toFixed(1)} kW</p>
       </div>
     );
   };
 
   return (
-    <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-4">
-      <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
-        Per-Robot Energy Consumption
+    <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm">
+      <h2 className="text-sm font-bold text-gray-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+        <BarChart3 className="w-4 h-4 text-blue-600" /> consumption profiling
       </h2>
       {data.length === 0 ? (
-        <p className="text-gray-500 text-sm text-center py-8">No robot data yet</p>
+        <p className="text-gray-400 text-sm text-center py-8">No robot data yet</p>
       ) : (
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-            <XAxis dataKey="name" tick={{ fill: "#9ca3af", fontSize: 11, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#9ca3af", fontSize: 11, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="name" tick={{ fill: "#6b7280", fontSize: 11, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: "#6b7280", fontSize: 11, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
             <Tooltip content={<CustomTooltip />} />
             <Bar dataKey="kw" radius={[4, 4, 0, 0]}>
               {data.map((entry, i) => (
@@ -150,37 +161,37 @@ function ShiftTable({ robots, energyLogs }) {
   });
 
   return (
-    <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-4 overflow-x-auto">
-      <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
-        Shift Comparison
+    <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4 shadow-sm overflow-x-auto">
+      <h2 className="text-sm font-bold text-gray-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+        <TableIcon className="w-4 h-4 text-blue-600" /> Shift Performance Comparison
       </h2>
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-gray-500 uppercase text-[10px]">
-            <th className="text-left py-2 px-2">Robot</th>
+          <tr className="text-gray-400 uppercase text-[10px] font-bold tracking-tighter border-b border-gray-100">
+            <th className="text-left py-2 px-2">Robot Unit</th>
             <th className="text-right py-2 px-2">Current Shift</th>
             <th className="text-right py-2 px-2">Previous Shift</th>
-            <th className="text-right py-2 px-2">7-Day Avg</th>
-            <th className="text-right py-2 px-2">Δ%</th>
+            <th className="text-right py-2 px-2">Historical Avg</th>
+            <th className="text-right py-2 px-2">Variance</th>
           </tr>
         </thead>
         <tbody className="font-mono">
-          {rows.map((r) => {
+          {rows.map((r, idx) => {
             const deltaColor =
-              r.delta == null ? "text-gray-500"
-              : r.delta > 20  ? "text-red-400 font-bold"
-              : r.delta < -10 ? "text-green-400 font-bold"
-              : "text-gray-300";
+              r.delta == null ? "text-gray-400"
+              : r.delta > 20  ? "text-red-600 font-bold"
+              : r.delta < -10 ? "text-green-600 font-bold"
+              : "text-gray-600";
             return (
-              <tr key={r.name} className="border-t border-gray-700/50">
-                <td className="py-2 px-2 text-white">{r.name}</td>
-                <td className="py-2 px-2 text-right text-gray-300">{fmt2(r.currVal)} kW</td>
-                <td className="py-2 px-2 text-right text-gray-500">
+              <tr key={idx} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
+                <td className="py-2.5 px-2 text-gray-900 font-bold">{r.name}</td>
+                <td className="py-2.5 px-2 text-right text-gray-800 font-bold">{fmt2(r.currVal)} kW</td>
+                <td className="py-2.5 px-2 text-right text-gray-500">
                   {r.prevVal != null ? `${fmt2(r.prevVal)} kW` : "—"}
                 </td>
-                <td className="py-2 px-2 text-right text-gray-400">{fmt2(r.avg7Val)} kW</td>
-                <td className={`py-2 px-2 text-right ${deltaColor}`}>
-                  {r.delta != null ? `${r.delta > 0 ? "+" : ""}${r.delta.toFixed(1)}%` : "—"}
+                <td className="py-2.5 px-2 text-right text-gray-500">{fmt2(r.avg7Val)} kW</td>
+                <td className={`py-2.5 px-2 text-right ${deltaColor}`}>
+                  {r.delta != null ? <span className="flex items-center justify-end gap-1">{r.delta > 0 ? <ChevronRight className="w-3 h-3 rotate-[270deg]"/> : <ChevronRight className="w-3 h-3 rotate-90 text-green-600"/>} {r.delta.toFixed(1)}%</span> : "—"}
                 </td>
               </tr>
             );
@@ -218,19 +229,26 @@ function OutlierAlerts({ robots, energyLogs }) {
   if (alerts.length === 0) return null;
 
   return (
-    <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-4">
-      <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
-        ⚡ Outlier Alerts
-      </h2>
+    <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm">
+      <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-2">
+        <ShieldAlert className="w-4 h-4 text-amber-500" />
+        <h2 className="text-sm font-bold text-gray-800 uppercase tracking-widest">
+           Energy Overflow Alerts
+        </h2>
+      </div>
       <div className="space-y-2">
-        {alerts.map((a) => (
-          <div key={a.name} className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
-            <span className="text-amber-400 text-lg">⚠</span>
-            <p className="text-sm text-amber-300">
-              <span className="font-mono font-bold">{a.name}</span> consuming{" "}
-              <span className="font-bold">{a.pct}% above baseline</span> — check vibration (
-              {a.vibration.toFixed(2)})
-            </p>
+        {alerts.map((a, idx) => (
+          <div key={idx} className="bg-amber-50 border border-amber-100 rounded-lg p-3 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <p className="text-xs text-amber-800 font-medium">
+                <span className="font-mono font-bold">{a.name}</span> detected at{" "}
+                <span className="font-bold text-red-600">{a.pct}% above</span> baseline. 
+              </p>
+            </div>
+            <span className="text-[10px] bg-white px-2 py-0.5 rounded border border-amber-200 text-amber-700 font-mono font-bold">
+               VIBRATION: {a.vibration.toFixed(2)}
+            </span>
           </div>
         ))}
       </div>
@@ -272,21 +290,21 @@ function GridLoadBalancer({ robots }) {
   });
 
   return (
-    <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-4">
+    <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
           Grid Load Balancer
         </h2>
         <button 
           onClick={() => setGridConstrained(!gridConstrained)}
-          className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${gridConstrained ? "bg-red-600 hover:bg-red-500 text-white" : "bg-gray-700 hover:bg-gray-600 text-gray-300"}`}
+          className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm ${gridConstrained ? "bg-red-600 hover:bg-red-700 text-white" : "bg-white border border-gray-200 hover:bg-gray-100 text-gray-700"}`}
         >
-          {gridConstrained ? "⚠ Reset Grid (100kW)" : "Simulate Low Power Grid (40kW)"}
+          {gridConstrained ? <><RotateCcw className="w-3.5 h-3.5"/> Reset Grid (100kW)</> : <><Activity className="w-3.5 h-3.5"/> Simulate Low Power Grid (40kW)</>}
         </button>
       </div>
 
       {gridConstrained && (
-        <div className="mb-4 bg-red-500/10 border border-red-500/30 text-red-300 text-xs p-3 rounded-xl flex items-center justify-between">
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-xl flex items-center justify-between">
           <span>Grid constraint active. Total available capacity: 40 kW.</span>
           <span className="font-mono">Priority: Zone-A &gt; Zone-B</span>
         </div>
@@ -294,28 +312,28 @@ function GridLoadBalancer({ robots }) {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {assignments.map(r => (
-          <div key={r.id} className={`p-3 rounded-lg border ${r.loadStatus === 'SUSPENDED' ? 'bg-gray-900 border-red-500/30 opacity-50 grayscale' : 'bg-gray-900 border-green-500/30'}`}>
+          <div key={r.id} className={`p-3 rounded-lg border ${r.loadStatus === 'SUSPENDED' ? 'bg-gray-50 border-gray-200 opacity-50 grayscale' : 'bg-white border-green-200 shadow-sm'}`}>
             <div className="flex justify-between items-center mb-1">
-              <span className="font-mono text-sm text-white font-bold">{r.name}</span>
-              <span className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-400">{r.zone}</span>
+              <span className="font-mono text-sm text-gray-900 font-bold">{r.name}</span>
+              <span className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{r.zone}</span>
             </div>
             
             {r.loadStatus === 'SUSPENDED' ? (
-              <p className="text-[10px] text-red-400 mt-2 font-semibold">POWER SACRIFICED</p>
+              <p className="text-[10px] text-red-600 mt-2 font-semibold">POWER SACRIFICED</p>
             ) : r.loadStatus === 'PARTIAL' ? (
-              <p className="text-[10px] text-amber-400 mt-2 font-semibold flex justify-between">
+              <p className="text-[10px] text-amber-600 mt-2 font-semibold flex justify-between">
                 <span>Power Restricted</span>
                 <span className="font-mono">{fmt2(r.allocated)}kW</span>
               </p>
             ) : (
-              <p className="text-[10px] text-green-400 mt-2 font-semibold flex justify-between">
+              <p className="text-[10px] text-green-600 mt-2 font-semibold flex justify-between">
                 <span>Operating Nominal</span>
                 <span className="font-mono">{fmt2(r.allocated)}kW</span>
               </p>
             )}
             
             {r.loadStatus === 'SUSPENDED' && (
-              <p className="text-[9px] text-gray-500 mt-1">Sacrificed for Zone-A priorities</p>
+              <p className="text-[9px] text-gray-400 mt-1">Sacrificed for Zone-A priorities</p>
             )}
           </div>
         ))}
@@ -323,11 +341,11 @@ function GridLoadBalancer({ robots }) {
       
       <div className="mt-3">
         <div className="flex justify-between mb-1">
-          <span className="text-[10px] text-gray-400 uppercase">Grid Usage</span>
-          <span className="text-xs font-mono font-bold text-white">{currentUsage.toFixed(1)} / {maxCapacity.toFixed(1)} kW</span>
+          <span className="text-[10px] text-gray-500 uppercase">Grid Usage</span>
+          <span className="text-xs font-mono font-bold text-gray-900">{currentUsage.toFixed(1)} / {maxCapacity.toFixed(1)} kW</span>
         </div>
-        <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-          <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${(currentUsage/maxCapacity)*100}%` }} />
+        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-full bg-blue-600 transition-all duration-500" style={{ width: `${(currentUsage/maxCapacity)*100}%` }} />
         </div>
       </div>
     </div>
@@ -353,19 +371,19 @@ export default function EnergyPage() {
   };
 
   return (
-    <div className="bg-gray-950 min-h-screen text-white">
+    <div className="bg-gray-50 min-h-screen text-gray-900">
       <NavBar />
 
-      <main className="p-4 max-w-[1600px] mx-auto space-y-2">
-        {/* Page header */}
-        <div className="flex items-center justify-between py-2">
-          <div>
-            <h1 className="text-lg font-mono font-bold text-white">Energy Monitor</h1>
-            <p className="text-xs text-gray-500">Real-time power consumption across all zones</p>
+      <main className="p-4 space-y-4 max-w-[1600px] mx-auto mt-4">
+        {/* Header Options */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-mono font-bold text-gray-900">Energy Monitor</h1>
+            <span className="text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">Phase 3 Allocation Config</span>
           </div>
           <button
             onClick={handleExport}
-            className="bg-gray-700 hover:bg-gray-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+            className="bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
           >
             ↓ Export JSON
           </button>
