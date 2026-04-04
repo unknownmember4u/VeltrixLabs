@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { DbConnection, SubscriptionBuilder } from "./module_bindings";
 
 const SPACETIMEDB_URI = "ws://localhost:3000";
-const MODULE_NAME = "zen-o-final";
+const MODULE_NAME = "zen-o-authoritative";
 
 let conn = null;
 const store = {
@@ -104,8 +104,8 @@ function initSpacetimeDB() {
       console.error("SpacetimeDB connect error — possible identity mismatch. Resetting token and retrying...", error);
       // Clear SDK identity/token from localStorage to force fresh connection
       try {
-        localStorage.removeItem("spacetimedb-auth-token-zen-o-final");
-        localStorage.removeItem("spacetimedb-identity-zen-o-final");
+        localStorage.removeItem("spacetimedb-auth-token-zen-o-authoritative");
+        localStorage.removeItem("spacetimedb-identity-zen-o-authoritative");
         // Also clear any global spacetimedb storage just in case
         Object.keys(localStorage).forEach(k => { if (k.includes('spacetimedb')) localStorage.removeItem(k); });
       } catch (e) { }

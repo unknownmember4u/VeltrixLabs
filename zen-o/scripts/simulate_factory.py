@@ -27,7 +27,7 @@ import os
 # ─── CONFIG ────────────────────────────────────────────────────────────
 
 SPACETIME_CLI = os.path.expanduser("~/.local/bin/spacetime")
-MODULE_NAME   = "zen-o-final"
+MODULE_NAME   = "zen-o-authoritative"
 HOST          = "local"
 
 # Simulation parameters

@@ -18,7 +18,7 @@ FLASK_PORT        = int(os.getenv("FLASK_PORT", "5001"))
 DEBUG_MODE        = os.getenv("DEBUG", "false").lower() == "true"
 OLLAMA_HOST       = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 SPACETIMEDB_HOST  = os.getenv("SPACETIMEDB_HOST", "http://localhost:3000")
-SPACETIMEDB_MODULE = os.getenv("SPACETIMEDB_MODULE", "zen-o-final")
+SPACETIMEDB_MODULE = os.getenv("SPACETIMEDB_MODULE", "zen-o-authoritative")
 GEMINI_API_KEY    = os.getenv("GEMINI_API_KEY", "")
 
 app = Flask(__name__)

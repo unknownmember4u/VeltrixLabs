@@ -6,17 +6,9 @@
 - Local:         http://localhost:3001
 - Network:       http://127.0.2.2:3001
 - Environments: .env.local
-✓ Ready in 713ms
-⚠ Slow filesystem detected. The benchmark took 790ms. If /Users/yash/Desktop/HackByte-4.0-VeltrixLabs/zen-o/zen-o-dashboard/.next/dev is a network drive, consider moving it to a local folder.
-See more: https://nextjs.org/docs/app/guides/local-development
+✓ Ready in 249ms
 
- GET / 200 in 315ms (next.js: 200ms, application-code: 115ms)
- GET /energy 200 in 39ms (next.js: 28ms, application-code: 11ms)
- GET /simulation 200 in 38ms (next.js: 25ms, application-code: 14ms)
- GET /supply 200 in 21ms (next.js: 13ms, application-code: 8ms)
- GET / 200 in 19ms (next.js: 4ms, application-code: 15ms)
- GET / 200 in 48ms (next.js: 18ms, application-code: 30ms)
- GET / 200 in 41ms (next.js: 3ms, application-code: 38ms)
- GET /energy 200 in 31ms (next.js: 16ms, application-code: 15ms)
- GET /simulation 200 in 26ms (next.js: 6ms, application-code: 20ms)
- GET /supply 200 in 22ms (next.js: 8ms, application-code: 14ms)
+ GET / 200 in 172ms (next.js: 79ms, application-code: 94ms)
+ GET /energy 200 in 34ms (next.js: 23ms, application-code: 11ms)
+ GET /simulation 200 in 43ms (next.js: 30ms, application-code: 14ms)
+ GET /supply 200 in 48ms (next.js: 34ms, application-code: 15ms)
