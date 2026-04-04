@@ -21,7 +21,7 @@ export const CountUp = ({ target, suffix = "", prefix = "", duration = 1800, dec
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && !started.current) {
@@ -32,7 +32,7 @@ export const CountUp = ({ target, suffix = "", prefix = "", duration = 1800, dec
       },
       { threshold: 0.5 }
     );
-    
+
     observer.observe(el);
     return () => observer.disconnect();
   }, [startCount]);

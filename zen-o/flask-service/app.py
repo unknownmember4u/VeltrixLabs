@@ -436,7 +436,198 @@ Respond strictly in JSON format:
         return jsonify({"error": str(e)}), 500
 
 
-# ─── ENDPOINT 4: GET /health ──────────────────────────────────────────
+# ─── ENDPOINT 4: POST /generate_config_pdf ────────────────────────────
+
+@app.route("/generate_config_pdf", methods=["POST"])
+def generate_config_pdf():
+    """Generate a machine configuration PDF from current robot state, ingest into RAG."""
+    try:
+        data = request.get_json() or {}
+        robots = data.get("robots", [])
+
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Build configuration content
+        sections = {}
+
+        sections["Page 1 - Machine Configuration Overview"] = f"""
+ZEN-O FACTORY — MACHINE CONFIGURATION REPORT
+Generated: {timestamp}
+Report Type: Automated Configuration Snapshot
+
+SECTION 1: FACTORY OVERVIEW
+
+Total Active Robots: {len(robots)}
+Zone-A Units: {sum(1 for r in robots if r.get('zone') == 'Zone-A')}
+Zone-B Units: {sum(1 for r in robots if r.get('zone') == 'Zone-B')}
+Active Faults: {sum(1 for r in robots if r.get('status') == 'fault')}
+Operational Units: {sum(1 for r in robots if r.get('status') == 'active')}
+
+CONFIGURATION PARAMETERS:
+- Vibration Safety Threshold: 0.85g RMS
+- Temperature Safety Threshold: 85°C
+- Energy Warning Threshold: 12 kW
+- Energy Critical Threshold: 15 kW
+- Maximum Grid Capacity: 100 kW (Normal) / 40 kW (Constrained)
+- Priority Protocol: Zone-A > Zone-B during load shedding
+
+MAINTENANCE SCHEDULE:
+- Daily: Visual inspection of all cables and pneumatic lines
+- Weekly: Joint bearing lubrication (ISO VG-68, 15ml/joint)
+- Monthly: Full vibration spectral analysis
+- Quarterly: Air filter replacement (Part# ZEN-AF-200, 25 Nm)
+"""
+
+        # Per-robot configuration
+        robot_configs = []
+        for r in robots:
+            rid = r.get("id", "?")
+            name = r.get("name", f"ARM-{rid}")
+            zone = r.get("zone", "Unknown")
+            status = r.get("status", "unknown")
+            temp = float(r.get("temperature", 0))
+            vib = float(r.get("vibration", 0))
+            energy = float(r.get("energy_kw", 0))
+
+            health = "NOMINAL"
+            if status == "fault":
+                health = "FAULT — REQUIRES IMMEDIATE ATTENTION"
+            elif vib > 0.7:
+                health = "WARNING — Elevated vibration detected"
+            elif temp > 75:
+                health = "CAUTION — Temperature above optimal range"
+
+            config_text = f"""
+Robot Unit: {name} (ID: {rid})
+Zone Assignment: {zone}
+Current Status: {status.upper()}
+Health Assessment: {health}
+
+Live Sensor Readings:
+  Temperature: {temp:.1f}°C {"⚠ ABOVE THRESHOLD" if temp > 85 else "(within normal range)"}
+  Vibration: {vib:.3f}g RMS {"⚠ ABOVE THRESHOLD" if vib > 0.85 else "(within normal range)"}
+  Energy Draw: {energy:.2f} kW {"⚠ HIGH CONSUMPTION" if energy > 12 else "(nominal)"}
+
+Recommended Maintenance:
+  - {"URGENT: Replace main drive bearing (Part# ZEN-BRG-500, Torque: 45 Nm)" if vib > 0.85 else "Bearing condition: Good — next inspection in 2000 hrs"}
+  - {"URGENT: Check coolant system (Part# ZEN-CP-150, Flow rate: 2.5 L/min min)" if temp > 85 else "Thermal management: Normal — thermal paste condition OK"}
+  - {"INVESTIGATE: Check for mechanical resistance" if energy > 12 else "Energy profile: Nominal"}
+
+Calibration Data:
+  Joint 1-6 Torque Settings: 45 Nm (main), 35 Nm (coupling), 10 Nm (cover)
+  Bearing Type: SKF 6205-2RS (Part# ZEN-BRG-500)
+  Lubrication: Mobilux EP2, 5ml per bearing
+  Encoder: Part# ZEN-ENC-200, Cable torque: 0.5 Nm
+"""
+            robot_configs.append(config_text)
+
+        sections["Page 2 - Zone-A Robot Configurations"] = (
+            "SECTION 2: ZONE-A ROBOT CONFIGURATIONS\n\n" +
+            "\n---\n".join([c for i, c in enumerate(robot_configs) if i < 4])
+        )
+
+        sections["Page 3 - Zone-B Robot Configurations"] = (
+            "SECTION 3: ZONE-B ROBOT CONFIGURATIONS\n\n" +
+            "\n---\n".join([c for i, c in enumerate(robot_configs) if i >= 4])
+        )
+
+        # Fault analysis section
+        faulted = [r for r in robots if r.get("status") == "fault"]
+        if faulted:
+            fault_text = "SECTION 4: ACTIVE FAULT ANALYSIS\n\n"
+            for r in faulted:
+                fault_text += f"""
+FAULT REPORT — {r.get('name', 'Unknown')}
+  Status: FAULT (requires AI diagnosis or manual intervention)
+  Vibration: {float(r.get('vibration', 0)):.3f}g RMS
+  Temperature: {float(r.get('temperature', 0)):.1f}°C
+  Energy: {float(r.get('energy_kw', 0)):.2f} kW
+
+  Probable Root Cause:
+  Based on sensor readings, likely causes ranked by probability:
+  1. Bearing wear (65%) — Replace Part# ZEN-BRG-500, Torque: 45 Nm
+  2. Belt tension loss (20%) — Adjust to 4.5 kgf, Belt Part# ZEN-BLT-150
+  3. Shaft misalignment (10%) — Laser align to <0.05mm offset
+  4. Gear mesh degradation (5%) — Inspect gearbox Part# ZEN-GBX-400
+
+  Resolution Protocol:
+  1. Run AI Diagnosis from dashboard
+  2. Apply recommended fix
+  3. Verify vibration < 0.30g RMS post-repair
+  4. Log maintenance action in audit trail
+"""
+            sections["Page 4 - Active Fault Analysis"] = fault_text
+        else:
+            sections["Page 4 - System Health Summary"] = """
+SECTION 4: SYSTEM HEALTH SUMMARY
+
+All robots are operating within normal parameters.
+No active faults detected.
+Continue with scheduled maintenance intervals as defined in Section 1.
+Next recommended full inspection: Within 48 hours.
+"""
+
+        # Generate PDF using PyMuPDF
+        doc = fitz.open()
+        for title, content in sections.items():
+            page = doc.new_page(width=595, height=842)
+            page.insert_text((50, 50), title, fontsize=14, fontname="helv", color=(0.1, 0.2, 0.5))
+            y = 80
+            for line in content.strip().split("\n"):
+                if y > 800:
+                    page = doc.new_page(width=595, height=842)
+                    y = 50
+                page.insert_text((50, y), line.strip(), fontsize=9, fontname="helv")
+                y += 14
+
+        # Save to manuals directory
+        manuals_dir = os.path.join(os.path.dirname(__file__), "manuals")
+        os.makedirs(manuals_dir, exist_ok=True)
+        pdf_filename = "zen_o_machine_config.pdf"
+        pdf_path = os.path.join(manuals_dir, pdf_filename)
+        doc.save(pdf_path)
+
+        # Re-ingest into RAG store
+        new_chunks = []
+        new_metas = []
+        for page_num in range(len(doc)):
+            page_text = doc[page_num].get_text()
+            if page_text.strip():
+                page_chunks = chunk_text(page_text, 300)
+                for ci, chunk in enumerate(page_chunks):
+                    new_chunks.append(chunk)
+                    new_metas.append({
+                        "source": pdf_filename,
+                        "page": page_num,
+                        "chunk_id": f"{pdf_filename}_p{page_num}_c{ci}",
+                    })
+        doc.close()
+
+        if new_chunks:
+            all_embeddings = []
+            batch_size = 20
+            for i in range(0, len(new_chunks), batch_size):
+                batch = new_chunks[i:i+batch_size]
+                embs = _ollama_embed(batch)
+                if embs:
+                    all_embeddings.extend(embs)
+                else:
+                    all_embeddings.extend([[0.0] * 4096] * len(batch))
+
+            _rag_store["documents"].extend(new_chunks)
+            _rag_store["embeddings"].extend(all_embeddings)
+            _rag_store["metadatas"].extend(new_metas)
+
+        from flask import send_file
+        return send_file(pdf_path, mimetype="application/pdf",
+                        as_attachment=True, download_name=pdf_filename)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ─── ENDPOINT 5: GET /health ──────────────────────────────────────────
 
 @app.route("/health", methods=["GET"])
 def health():

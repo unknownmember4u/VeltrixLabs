@@ -12,3 +12,6 @@
  GET /energy 200 in 34ms (next.js: 23ms, application-code: 11ms)
  GET /simulation 200 in 43ms (next.js: 30ms, application-code: 14ms)
  GET /supply 200 in 48ms (next.js: 34ms, application-code: 15ms)
+ GET / 200 in 29ms (next.js: 4ms, application-code: 25ms)
+ GET / 200 in 11ms (next.js: 3ms, application-code: 7ms)
+ GET / 200 in 18ms (next.js: 3ms, application-code: 16ms)

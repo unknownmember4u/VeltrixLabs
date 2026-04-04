@@ -1,4 +1,4 @@
-// app/energy/page.js — Energy Monitoring Dashboard
+// app/energy/page.js — Energy Monitoring Dashboard with AI Explanations
 "use client";
 
 import dynamic from "next/dynamic";
@@ -11,7 +11,7 @@ const XAxis           = dynamic(() => import("recharts").then((m) => m.XAxis),  
 const YAxis           = dynamic(() => import("recharts").then((m) => m.YAxis),            { ssr: false });
 const Tooltip         = dynamic(() => import("recharts").then((m) => m.Tooltip),          { ssr: false });
 const ResponsiveContainer = dynamic(() => import("recharts").then((m) => m.ResponsiveContainer), { ssr: false });
-import { useState } from "react";
+import { useState, useEffect } from "react";
 const Cell            = dynamic(() => import("recharts").then((m) => m.Cell),              { ssr: false });
 import { 
   ShieldAlert, 
@@ -22,7 +22,12 @@ import {
   ChevronRight, 
   BarChart3, 
   Map as MapIcon, 
-  Table as TableIcon 
+  Table as TableIcon,
+  Brain,
+  Power,
+  PowerOff,
+  Lightbulb,
+  ArrowRight
 } from "lucide-react";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -39,47 +44,102 @@ function zoneColor(avg) {
   return "rgba(239,68,68,0.25)";
 }
 
+function zoneBorderColor(avg) {
+  if (avg < 9)  return "#22c55e";
+  if (avg <= 12) return "#f59e0b";
+  return "#ef4444";
+}
+
 function fmt2(n) { return Number(n).toFixed(2); }
 
-// ─── SECTION A — Zone Energy Map (SVG) ───────────────────────────────────────
+// ─── SECTION A — Dynamic Zone Energy Map ─────────────────────────────────────
 
 function ZoneMap({ robots }) {
   const zoneA = robots.filter((r) => r.zone === "Zone-A");
   const zoneB = robots.filter((r) => r.zone === "Zone-B");
   const avgA  = zoneA.length ? zoneA.reduce((s, r) => s + Number(r.energyKw), 0) / zoneA.length : 0;
   const avgB  = zoneB.length ? zoneB.reduce((s, r) => s + Number(r.energyKw), 0) / zoneB.length : 0;
+  const totalA = zoneA.reduce((s, r) => s + Number(r.energyKw), 0);
+  const totalB = zoneB.reduce((s, r) => s + Number(r.energyKw), 0);
+  const totalAll = totalA + totalB;
+  const faultsA = zoneA.filter(r => r.status === "fault").length;
+  const faultsB = zoneB.filter(r => r.status === "fault").length;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4 shadow-sm">
       <h2 className="text-sm font-bold text-gray-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-        <MapIcon className="w-4 h-4 text-blue-600" /> Zone Energy Map
+        <MapIcon className="w-4 h-4 text-blue-600" /> Dynamic Zone Energy Map
       </h2>
-      <div className="overflow-x-auto">
-        <svg viewBox="0 0 700 160" className="w-full max-w-2xl" style={{ height: 160 }}>
-          {/* Zone A */}
-          <rect x="20" y="20" width="310" height="120" rx="12" fill={zoneColor(avgA)} stroke="#e5e7eb" strokeWidth="1" />
-          <text x="175" y="65" textAnchor="middle" fill="#111827" fontSize="14" fontWeight="bold" fontFamily="monospace">
-            Zone-A
-          </text>
-          <text x="175" y="90" textAnchor="middle" fill="#4b5563" fontSize="12" fontFamily="monospace">
-            {fmt2(avgA)} kW avg
-          </text>
-          <text x="175" y="112" textAnchor="middle" fill="#6b7280" fontSize="11" fontFamily="monospace">
-            {zoneA.length} robots
-          </text>
+      
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        {/* Zone A */}
+        <div className={`rounded-xl p-4 border-2 transition-all duration-500`}
+             style={{ backgroundColor: zoneColor(avgA), borderColor: zoneBorderColor(avgA) }}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-mono font-bold text-gray-900">Zone-A</span>
+            {faultsA > 0 && (
+              <span className="text-[9px] bg-red-500 text-white px-1.5 py-0.5 rounded font-bold animate-pulse">
+                {faultsA} FAULT{faultsA > 1 ? "S" : ""}
+              </span>
+            )}
+          </div>
+          <p className="text-2xl font-mono font-bold text-gray-900 mb-1">{fmt2(avgA)} <span className="text-sm text-gray-500">kW avg</span></p>
+          <p className="text-[10px] text-gray-600 font-mono mb-2">Total: {fmt2(totalA)} kW • {zoneA.length} robots</p>
+          
+          {/* Per-robot bars */}
+          <div className="space-y-1.5">
+            {zoneA.map(r => (
+              <div key={r.id} className="flex items-center gap-2">
+                <span className="text-[9px] font-mono font-bold text-gray-600 w-14">{r.name}</span>
+                <div className="flex-1 h-2 bg-white/60 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-500" 
+                       style={{ width: `${Math.min(100, (Number(r.energyKw) / 15) * 100)}%`, backgroundColor: barColor(Number(r.energyKw)) }} />
+                </div>
+                <span className="text-[9px] font-mono font-bold text-gray-700 w-12 text-right">{Number(r.energyKw).toFixed(1)}kW</span>
+              </div>
+            ))}
+          </div>
+        </div>
 
-          {/* Zone B */}
-          <rect x="370" y="20" width="310" height="120" rx="12" fill={zoneColor(avgB)} stroke="#e5e7eb" strokeWidth="1" />
-          <text x="525" y="65" textAnchor="middle" fill="#111827" fontSize="14" fontWeight="bold" fontFamily="monospace">
-            Zone-B
-          </text>
-          <text x="525" y="90" textAnchor="middle" fill="#4b5563" fontSize="12" fontFamily="monospace">
-            {fmt2(avgB)} kW avg
-          </text>
-          <text x="525" y="112" textAnchor="middle" fill="#6b7280" fontSize="11" fontFamily="monospace">
-            {zoneB.length} robots
-          </text>
-        </svg>
+        {/* Zone B */}
+        <div className={`rounded-xl p-4 border-2 transition-all duration-500`}
+             style={{ backgroundColor: zoneColor(avgB), borderColor: zoneBorderColor(avgB) }}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-mono font-bold text-gray-900">Zone-B</span>
+            {faultsB > 0 && (
+              <span className="text-[9px] bg-red-500 text-white px-1.5 py-0.5 rounded font-bold animate-pulse">
+                {faultsB} FAULT{faultsB > 1 ? "S" : ""}
+              </span>
+            )}
+          </div>
+          <p className="text-2xl font-mono font-bold text-gray-900 mb-1">{fmt2(avgB)} <span className="text-sm text-gray-500">kW avg</span></p>
+          <p className="text-[10px] text-gray-600 font-mono mb-2">Total: {fmt2(totalB)} kW • {zoneB.length} robots</p>
+          
+          {/* Per-robot bars */}
+          <div className="space-y-1.5">
+            {zoneB.map(r => (
+              <div key={r.id} className="flex items-center gap-2">
+                <span className="text-[9px] font-mono font-bold text-gray-600 w-14">{r.name}</span>
+                <div className="flex-1 h-2 bg-white/60 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-500" 
+                       style={{ width: `${Math.min(100, (Number(r.energyKw) / 15) * 100)}%`, backgroundColor: barColor(Number(r.energyKw)) }} />
+                </div>
+                <span className="text-[9px] font-mono font-bold text-gray-700 w-12 text-right">{Number(r.energyKw).toFixed(1)}kW</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Total bar */}
+      <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+        <div className="flex justify-between mb-1.5">
+          <span className="text-[10px] text-gray-500 uppercase font-bold">Total Factory Consumption</span>
+          <span className="text-xs font-mono font-bold text-gray-900">{fmt2(totalAll)} kW</span>
+        </div>
+        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div className="h-full bg-blue-600 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (totalAll / 100) * 100)}%` }} />
+        </div>
       </div>
     </div>
   );
@@ -130,7 +190,6 @@ function RobotBarChart({ robots }) {
 // ─── SECTION C — Shift Comparison Table ──────────────────────────────────────
 
 function ShiftTable({ robots, energyLogs }) {
-  // Group logs by robot_id and shift
   const byRobot = {};
   for (const r of robots) {
     byRobot[r.id] = { name: r.name, shifts: {}, current: Number(r.energyKw) };
@@ -205,7 +264,6 @@ function ShiftTable({ robots, energyLogs }) {
 // ─── SECTION D — Outlier Alerts ──────────────────────────────────────────────
 
 function OutlierAlerts({ robots, energyLogs }) {
-  // Compute per-robot averages from energy logs
   const avgByRobot = {};
   for (const log of energyLogs) {
     if (!avgByRobot[log.robotId]) avgByRobot[log.robotId] = [];
@@ -256,10 +314,12 @@ function OutlierAlerts({ robots, energyLogs }) {
   );
 }
 
-// ─── SECTION E — Grid Load Balancer ──────────────────────────────────────────
+// ─── SECTION E — Grid Load Balancer with AI Explanations ─────────────────────
 
 function GridLoadBalancer({ robots }) {
   const [gridConstrained, setGridConstrained] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Normal capacity is 100kW, constrained is 40kW
   const maxCapacity = gridConstrained ? 40 : 100;
@@ -272,13 +332,11 @@ function GridLoadBalancer({ robots }) {
     let allocated = 0;
     let status = "NORMAL";
     
-    // Attempt to allocate full power if system isn't at fault
     const needed = Number(r.energyKw);
     if (currentUsage + needed <= maxCapacity) {
       allocated = needed;
       currentUsage += allocated;
     } else if (currentUsage < maxCapacity) {
-      // Partial power
       allocated = maxCapacity - currentUsage;
       currentUsage += allocated;
       status = "PARTIAL";
@@ -288,6 +346,56 @@ function GridLoadBalancer({ robots }) {
     
     return { ...r, allocated, loadStatus: status };
   });
+
+  // Generate AI explanation when constrained
+  useEffect(() => {
+    if (!gridConstrained) {
+      setAiExplanation(null);
+      return;
+    }
+    
+    const suspended = assignments.filter(a => a.loadStatus === "SUSPENDED");
+    const partial = assignments.filter(a => a.loadStatus === "PARTIAL");
+    const normal = assignments.filter(a => a.loadStatus === "NORMAL");
+    
+    // Build deterministic AI explanation
+    const explanations = [];
+    
+    if (suspended.length > 0) {
+      explanations.push({
+        type: "SUSPENDED",
+        icon: <PowerOff className="w-4 h-4 text-red-500" />,
+        title: "Power Removed",
+        devices: suspended.map(s => s.name),
+        reason: `Zone-B robots ${suspended.map(s => s.name).join(", ")} have been powered down. These units are classified as lower-priority under the factory's energy triage protocol. Zone-A hosts critical assembly stations with higher throughput requirements.`,
+        impact: `Energy saved: ${suspended.reduce((s, r) => s + Number(r.energyKw), 0).toFixed(1)} kW — redirected to Zone-A primary operations.`
+      });
+    }
+    
+    if (partial.length > 0) {
+      explanations.push({
+        type: "PARTIAL",
+        icon: <Power className="w-4 h-4 text-amber-500" />,
+        title: "Power Restricted",
+        devices: partial.map(p => p.name),
+        reason: `${partial.map(p => p.name).join(", ")} running at reduced capacity (${partial.map(p => `${p.name}: ${fmt2(p.allocated)}kW of ${fmt2(Number(p.energyKw))}kW requested`).join("; ")}). These are the last units before the grid ceiling was hit.`,
+        impact: `Duty cycle reduced to ${partial.map(p => `${((p.allocated / Number(p.energyKw)) * 100).toFixed(0)}%`).join(", ")} — monitoring for thermal drift.`
+      });
+    }
+    
+    if (normal.length > 0) {
+      explanations.push({
+        type: "NORMAL",
+        icon: <Lightbulb className="w-4 h-4 text-green-500" />,
+        title: "Full Power Maintained",
+        devices: normal.map(n => n.name),
+        reason: `Zone-A units ${normal.map(n => n.name).join(", ")} retain full power allocation. These robots operate critical path assembly stations — cutting their power would halt the primary production line and cause cascading delays.`,
+        impact: `Full throughput maintained at ${normal.reduce((s, r) => s + Number(r.energyKw), 0).toFixed(1)} kW total allocation.`
+      });
+    }
+    
+    setAiExplanation(explanations);
+  }, [gridConstrained, robots]);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm">
@@ -348,6 +456,37 @@ function GridLoadBalancer({ robots }) {
           <div className="h-full bg-blue-600 transition-all duration-500" style={{ width: `${(currentUsage/maxCapacity)*100}%` }} />
         </div>
       </div>
+
+      {/* AI Explanation Section */}
+      {gridConstrained && aiExplanation && (
+        <div className="mt-4 border-t border-gray-200 pt-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Brain className="w-4 h-4 text-blue-600" />
+            <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">AI Power Distribution Analysis</h3>
+          </div>
+          
+          <div className="space-y-3">
+            {aiExplanation.map((exp, idx) => (
+              <div key={idx} className={`rounded-lg border p-3 ${
+                exp.type === "SUSPENDED" ? "bg-red-50/50 border-red-200" :
+                exp.type === "PARTIAL" ? "bg-amber-50/50 border-amber-200" :
+                "bg-green-50/50 border-green-200"
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  {exp.icon}
+                  <span className="text-xs font-bold text-gray-800">{exp.title}</span>
+                  <ArrowRight className="w-3 h-3 text-gray-400" />
+                  <span className="text-[10px] font-mono font-bold text-gray-600">{exp.devices.join(", ")}</span>
+                </div>
+                <p className="text-[10px] text-gray-600 leading-relaxed mb-1.5">{exp.reason}</p>
+                <p className="text-[10px] font-medium text-gray-500 italic flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-amber-500" /> {exp.impact}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

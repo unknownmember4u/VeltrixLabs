@@ -312,6 +312,12 @@ export async function callReducer(name, args) {
           String(args.operator_id || "flask-sim")
         ));
         break;
+      case "reset_material":
+        safeCall(() => conn.reducers.resetMaterial(
+          Number(args.material_id),
+          Number(args.level)
+        ));
+        break;
       default:
         console.warn(`[SpacetimeDB] Unknown reducer: ${name}`);
     }

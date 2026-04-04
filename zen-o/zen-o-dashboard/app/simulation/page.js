@@ -60,10 +60,11 @@ function RiskGauge({ score }) {
   );
 }
 
-// ─── PDF UPLOAD COMPONENT ───────────────────────────────────────────────────
+// ─── PDF UPLOAD + AUTO-GENERATE CONFIG ──────────────────────────────────────
 
-function PdfUpload() {
+function PdfUpload({ robots }) {
   const [uploading, setUploading] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState("");
 
   const handleUpload = async (e) => {
@@ -88,20 +89,73 @@ function PdfUpload() {
     }
   };
 
+  const handleGenerateConfig = async () => {
+    setGenerating(true);
+    setMsg("Generating config PDF...");
+    try {
+      const robotsPlain = (robots || []).map((r) => ({
+        id: r.id,
+        name: r.name,
+        zone: r.zone,
+        status: r.status,
+        temperature: r.temperature,
+        vibration: r.vibration,
+        energy_kw: r.energyKw,
+      }));
+      const res = await fetch(`${FLASK_URL}/generate_config_pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ robots: robotsPlain }),
+      });
+      if (res.ok) {
+        // Download the PDF
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "zen_o_machine_config.pdf";
+        a.click();
+        URL.revokeObjectURL(url);
+        setMsg("Config PDF generated & ingested into RAG.");
+      } else {
+        setMsg("✗ Generation failed.");
+      }
+    } catch {
+      setMsg("✗ Error connecting to AI Service.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4 shadow-sm">
-      <div className="bg-blue-50 p-2 rounded-lg">
-        <FileText className="w-5 h-5 text-blue-600" />
+    <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+      <div className="flex items-center gap-4 mb-3">
+        <div className="bg-blue-50 p-2 rounded-lg">
+          <FileText className="w-5 h-5 text-blue-600" />
+        </div>
+        <div className="flex-1">
+          <h3 className="text-xs font-bold text-gray-800 uppercase tracking-tight">Ollama RAG Context</h3>
+          <p className="text-[10px] text-gray-500">Upload technical PDFs or auto-generate machine configuration for AI diagnostics.</p>
+        </div>
+        {msg && <span className="text-[10px] text-blue-600 font-mono font-bold bg-blue-50 px-2 py-1 rounded border border-blue-100">{msg}</span>}
       </div>
-      <div>
-        <h3 className="text-xs font-bold text-gray-800 uppercase tracking-tight">Ollama RAG Context</h3>
-        <p className="text-[10px] text-gray-500">Upload technical PDFs to refine AI diagnostic precision.</p>
+      <div className="flex items-center gap-3">
+        <label className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer transition-all shadow-sm">
+          {uploading ? "Processing..." : <><FileUp className="w-4 h-4" /> Upload PDF</>}
+          <input type="file" accept=".pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
+        </label>
+        <button
+          onClick={handleGenerateConfig}
+          disabled={generating || !robots?.length}
+          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {generating ? (
+            <><span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" /> Generating...</>
+          ) : (
+            <><FileText className="w-4 h-4" /> Generate Machine Config PDF</>
+          )}
+        </button>
       </div>
-      <label className="ml-auto flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer transition-all shadow-sm">
-        {uploading ? "Processing..." : <><FileUp className="w-4 h-4" /> Upload PDF</>}
-        <input type="file" accept=".pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
-      </label>
-      {msg && <span className="text-[10px] text-blue-600 font-mono font-bold bg-blue-50 px-2 py-1 rounded border border-blue-100">{msg}</span>}
     </div>
   );
 }
@@ -363,7 +417,7 @@ export default function SimulationPage() {
           </div>
         </div>
 
-        <PdfUpload />
+        <PdfUpload robots={robots} />
 
         <div>
           <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-3 flex items-center gap-1.5">

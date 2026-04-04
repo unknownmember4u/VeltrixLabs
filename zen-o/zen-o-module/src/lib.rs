@@ -149,18 +149,60 @@ fn get_latest_audit_hash(ctx: &ReducerContext) -> String {
 
 fn check_material_levels(ctx: &ReducerContext) {
     for material in ctx.db.material().iter() {
-        if material.quantity_percent <= 15.0 {
+        if material.quantity_percent <= 10.0 {
+            // Generate hash-chained purchase order
+            let supplier_code = match material.id {
+                1 => "SUP-001",
+                2 => "SUP-002",
+                3 => "SUP-003",
+                4 => "SUP-004",
+                _ => "SUP-001",
+            };
+            let quantity_kg = match material.id {
+                1 => 2400.0,
+                2 => 1800.0,
+                3 => 600.0,
+                4 => 400.0,
+                _ => 1000.0,
+            };
+
+            let prev_hash = get_latest_audit_hash(ctx);
+            let po_payload = format!("AUTO_PO_{}_{}_{}kg", material.name, material.quantity_percent, quantity_kg);
+            let po_hash = compute_hash("SUPPLY_ORDER", material.id, &po_payload, &prev_hash);
+
             let _ = ctx.db.purchase_order().insert(PurchaseOrder {
                 id: 0,
                 material_name: material.name.clone(),
-                quantity_kg: 2400.0,
-                supplier_code: "SUP-001".to_string(),
+                quantity_kg,
+                supplier_code: supplier_code.to_string(),
                 status: "PENDING".to_string(),
                 created_at: ctx.timestamp,
-                hash: "auto-generated-po".to_string(),
+                hash: po_hash.clone(),
             });
-            // We no longer put this in audit_log, so the hash chain focuses only on errors
+
+            // Log to audit chain
+            let _ = ctx.db.audit_log().insert(AuditLog {
+                id: 0,
+                event_type: "SUPPLY_AUTO_ORDER".to_string(),
+                robot_id: 0,
+                payload: po_payload,
+                hash: po_hash,
+                prev_hash,
+                operator_id: "supply-chain-system".to_string(),
+                timestamp: ctx.timestamp,
+            });
         }
+    }
+}
+
+// ─── RESET MATERIAL TO 100% ──────────────────────────────────────────
+
+#[spacetimedb::reducer]
+pub fn reset_material(ctx: &ReducerContext, material_id: u32, level: f32) {
+    if let Some(mut material) = ctx.db.material().id().find(*&material_id) {
+        material.quantity_percent = level;
+        material.last_updated = ctx.timestamp;
+        let _ = ctx.db.material().id().update(material);
     }
 }
 
