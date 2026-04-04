@@ -1,23 +1,10 @@
 #!/usr/bin/env python3
 """
-Zen-O Continuous Sensor Simulator
-==================================
-Continuously pushes realistic, drifting sensor data into SpacetimeDB
-via the CLI, making the dashboard come alive with real-time updates.
-
-Features:
-  - 8 robots with different base profiles
-  - ARM-08 ALWAYS has a persistent fault (vibration_fault)
-  - Realistic random walks for temperature, vibration, energy
-  - Periodic anomaly injection (vibration spikes, overheating)
-  - Material consumption (triggers autonomous PO generation)
-  - Energy logging per shift
-  - Automatic fault→recovery cycles
-  - AI diagnosis on ARM-08 resets its values to healthy
-
-Usage:
-  python3 scripts/simulate_factory.py
-  (Requires SpacetimeDB running on localhost:3000 with module published)
+Zen-O Continuous Sensor Simulator v2.1
+=======================================
+Slowed-down simulation with functional anomaly injection.
+ARM-08 starts with persistent fault. AI diagnosis resolves it properly.
+Re-injection happens on much longer cooldown.
 """
 
 import subprocess
@@ -33,13 +20,16 @@ SPACETIME_CLI = os.path.expanduser("~/.local/bin/spacetime")
 MODULE_NAME   = "zen-o-authoritative"
 HOST          = "local"
 
-# Simulation parameters
-UPDATE_INTERVAL = 2        # seconds between sensor updates
-ENERGY_LOG_EVERY = 5       # log energy every N ticks
-RECOVERY_TICKS  = 12       # pause simulation for robot during fault
-
+# Simulation parameters — SLOWED DOWN
+UPDATE_INTERVAL = 5        # seconds between sensor updates (was 2)
+ENERGY_LOG_EVERY = 6       # log energy every N ticks
 NUM_ROBOTS = 8
 SHIFTS = ["morning", "afternoon", "night"]
+
+# Anomaly timing — MUCH SLOWER
+BACKGROUND_ANOMALY_EVERY = 30   # ticks between random anomalies (~2.5 min)
+ARM8_REINJECT_COOLDOWN   = 60   # ticks before ARM-08 re-faults after AI fix (~5 min)
+AUTO_RESOLVE_TICKS       = 20   # ticks before non-ARM-08 faults auto-resolve (~1.5 min)
 
 # ─── ROBOT STATE ──────────────────────────────────
 
@@ -49,15 +39,10 @@ class RobotState:
         self.zone = "Zone-A" if robot_id <= 4 else "Zone-B"
         self.name = f"ARM-{robot_id:02d}"
         
-        # Completely Static Healthy Baseline
+        # Healthy Baseline
         self.base_temp = 65.0 + (robot_id * 0.5)
         self.base_vib  = 0.35 + (robot_id * 0.02)
         self.base_energy = 8.0 + (robot_id * 0.1)
-        
-        # Fault Values
-        self.fault_temp = 92.5 + robot_id
-        self.fault_vib = 0.91 + (robot_id * 0.01)
-        self.fault_energy = 14.5
         
         # Current values
         self.temp = self.base_temp
@@ -66,76 +51,59 @@ class RobotState:
         self.is_fault = False
         self.current_anomaly = None
         self.fault_ticks = 0
-        self.needs_auto_resolve = False
+        self.resolved_at_tick = 0  # track when ARM-08 was last resolved
         
-        # ARM-08 persistent fault: always starts in fault
+        # ARM-08 persistent fault at startup
         if self.id == 8:
             self.is_fault = True
             self.current_anomaly = "vibration_fault"
 
     def update_physics(self, tick):
-        """Deterministic physics engine with wider predictable oscillation."""
+        """Gentle physics — values change slowly."""
         if self.is_fault:
             self.fault_ticks += 1
             
-            # Lock to specific error states depending on anomaly type
             if self.current_anomaly == "overheating":
-                self.temp = 110.0 + math.sin(tick * 1.5) * 2.5
-                self.vibration = 0.45 + math.cos(tick) * 0.04
+                self.temp = 92.0 + math.sin(tick * 0.3) * 1.5
+                self.vibration = 0.45 + math.cos(tick * 0.2) * 0.02
                 self.energy_kw = self.base_energy + 2.0
             elif self.current_anomaly == "vibration_fault":
-                self.temp = 75.0 + math.sin(tick) * 1.5
-                self.vibration = 0.96 + math.sin(tick * 2.0) * 0.03
+                self.temp = 75.0 + math.sin(tick * 0.2) * 1.0
+                self.vibration = 0.92 + math.sin(tick * 0.3) * 0.02
                 self.energy_kw = self.base_energy + 1.0
             elif self.current_anomaly == "bearing_wear":
-                self.temp = 85.0 + math.sin(tick * 0.8) * 1.0
-                self.vibration = 0.88 + math.cos(tick * 1.2) * 0.02
+                self.temp = 82.0 + math.sin(tick * 0.15) * 0.8
+                self.vibration = 0.88 + math.cos(tick * 0.2) * 0.01
                 self.energy_kw = self.base_energy + 1.5
             elif self.current_anomaly == "motor_fault":
-                self.temp = 95.0 + math.sin(tick) * 2.0
-                self.vibration = 0.82 + math.cos(tick) * 0.01
-                self.energy_kw = 18.5 + math.sin(tick * 2.0) * 0.5
+                self.temp = 90.0 + math.sin(tick * 0.2) * 1.5
+                self.vibration = 0.82 + math.cos(tick * 0.15) * 0.01
+                self.energy_kw = 15.5 + math.sin(tick * 0.3) * 0.3
             else:
-                # Generic fault
-                self.temp = self.fault_temp + math.sin(tick) * 2.0
-                self.vibration = self.fault_vib + math.sin(tick * 1.5) * 0.02
-                self.energy_kw = self.fault_energy
-
-            # ARM-08 NEVER auto-resolves — only AI diagnosis resolves it
-            if self.id == 8:
-                self.needs_auto_resolve = False
-            elif self.fault_ticks >= 15:
-                self.needs_auto_resolve = True
-
+                self.temp = 88.0 + math.sin(tick * 0.2) * 1.5
+                self.vibration = 0.90 + math.sin(tick * 0.25) * 0.02
+                self.energy_kw = 13.0
         else:
-            # Locked to active baseline with wider predictable steps
-            self.temp = self.base_temp + math.sin(tick * 0.5 + self.id) * 2.5
-            self.vibration = self.base_vib + math.cos(tick * 0.8 + self.id) * 0.06
-            self.energy_kw = self.base_energy + math.sin(tick * 0.3 + self.id) * 0.4
+            # Gentle baseline oscillation — very slow changes
+            self.temp = self.base_temp + math.sin(tick * 0.1 + self.id) * 1.5
+            self.vibration = self.base_vib + math.cos(tick * 0.15 + self.id) * 0.03
+            self.energy_kw = self.base_energy + math.sin(tick * 0.08 + self.id) * 0.2
 
     def trigger_anomaly(self, anomaly_type="vibration_fault"):
-        """Manually push to fault state."""
         self.is_fault = True
         self.current_anomaly = anomaly_type
         self.fault_ticks = 0
-        self.needs_auto_resolve = False
-        self.update_physics(0)
 
-    def resolve_anomaly(self):
-        """Restore healthy baseline."""
+    def resolve_anomaly(self, tick=0):
         self.is_fault = False
         self.current_anomaly = None
         self.fault_ticks = 0
-        self.needs_auto_resolve = False
-        self.update_physics(0)
+        self.resolved_at_tick = tick
 
 
 # ─── SPACETIMEDB CALLER ─────────────────────────────
 
 def call_reducer(reducer_name, args_list):
-    """Call a SpacetimeDB reducer via the CLI.
-    args_list: list of primitive values to pass as positional arguments.
-    """
     cmd = [
         SPACETIME_CLI, "call",
         MODULE_NAME, reducer_name,
@@ -157,18 +125,22 @@ def call_reducer(reducer_name, args_list):
         print(f"  ✗ spacetime CLI not found at {SPACETIME_CLI}")
         sys.exit(1)
 
-def sync_cloud_state(robots):
-    """Query the SpacetimeDB and sync manual UI faults/resolutions to local Python mock."""
+def sync_cloud_state(robots, tick):
+    """Sync dashboard actions (inject/resolve) back to local robot state."""
     
-    # 1. Fetch latest anomaly injections to know TYPE
     injections = {}
     try:
-        res_audit = subprocess.run([SPACETIME_CLI, "sql", MODULE_NAME, "SELECT robot_id, payload, event_type FROM audit_log", "--server", HOST], capture_output=True, text=True, timeout=5)
+        res_audit = subprocess.run(
+            [SPACETIME_CLI, "sql", MODULE_NAME, 
+             "SELECT robot_id, payload, event_type FROM audit_log", 
+             "--server", HOST],
+            capture_output=True, text=True, timeout=5
+        )
         if res_audit.returncode == 0:
             for line in res_audit.stdout.splitlines():
                 if "ANOMALY_INJECTED" in line:
                     parts = [p.strip().strip('"') for p in line.split("|")]
-                    if len(parts) >= 3:
+                    if len(parts) >= 4:
                         try:
                             r_id = int(parts[2])
                             payload = parts[3]
@@ -178,7 +150,6 @@ def sync_cloud_state(robots):
     except Exception:
         pass
 
-    # 2. Fetch ground truth robot status
     cmd = [SPACETIME_CLI, "sql", MODULE_NAME, "SELECT id, status FROM robot", "--server", HOST]
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
@@ -196,10 +167,10 @@ def sync_cloud_state(robots):
                                 if db_status == "fault" and not robot.is_fault:
                                     atype = injections.get(robot.id, "vibration_fault")
                                     robot.trigger_anomaly(atype)
-                                    print(f"  ⚡ {robot.name} — OVERRIDE: Injection '{atype}' Synced to DB")
+                                    print(f"  ⚡ {robot.name} — Synced: fault '{atype}' from dashboard")
                                 elif db_status == "active" and robot.is_fault:
-                                    robot.resolve_anomaly()
-                                    print(f"  ✨ {robot.name} — OVERRIDE: AI Resolution Synced to DB! Active baseline restored.")
+                                    robot.resolve_anomaly(tick)
+                                    print(f"  ✨ {robot.name} — Synced: AI Resolution from dashboard (healthy baseline restored)")
                         except ValueError:
                             pass
     except Exception:
@@ -210,25 +181,25 @@ def sync_cloud_state(robots):
 
 def main():
     print("═══════════════════════════════════════════════════════")
-    print("  ZEN-O FACTORY SIMULATOR v2.0")
+    print("  ZEN-O FACTORY SIMULATOR v2.1 (Slow Mode)")
     print("  Continuously pushing sensor data to SpacetimeDB")
     print(f"  Module: {MODULE_NAME} → {HOST}")
     print(f"  Interval: {UPDATE_INTERVAL}s | Robots: {NUM_ROBOTS}")
-    print("  ARM-08: PERSISTENT FAULT (only AI diagnosis resolves)")
+    print(f"  ARM-08: Persistent fault (AI diagnosis resolves)")
+    print(f"  Background anomaly every ~{BACKGROUND_ANOMALY_EVERY * UPDATE_INTERVAL}s")
+    print(f"  ARM-08 re-inject cooldown: ~{ARM8_REINJECT_COOLDOWN * UPDATE_INTERVAL}s")
     print("═══════════════════════════════════════════════════════\n")
 
-    # Check SpacetimeDB is reachable
+    # Check SpacetimeDB
     print("Testing connection...")
     if not call_reducer("simulate_sensor_drift", []):
         print("✗ Cannot reach SpacetimeDB. Is it running?")
-        print(f"  Try: spacetime start --listen-addr 0.0.0.0:3000")
         sys.exit(1)
     print("✓ SpacetimeDB connected.\n")
 
     robots = [RobotState(i) for i in range(1, NUM_ROBOTS + 1)]
     tick = 0
     current_shift_idx = 0
-    anomalies_injected = 0
     updates_sent = 0
 
     # Inject ARM-08 fault at startup
@@ -240,28 +211,29 @@ def main():
             tick += 1
             current_shift = SHIFTS[current_shift_idx % len(SHIFTS)]
 
-            # Rotate shift every 60 ticks (~3 minutes)
-            if tick % 60 == 0:
+            # Rotate shift every 120 ticks (~10 minutes)
+            if tick % 120 == 0:
                 current_shift_idx += 1
                 print(f"\n🔄 Shift change → {SHIFTS[current_shift_idx % len(SHIFTS)]}")
 
             print(f"\n── Tick {tick} ({current_shift}) {'─' * 40}")
 
-            # Pull external dashboard actions
-            sync_cloud_state(robots)
+            # Sync dashboard actions
+            sync_cloud_state(robots, tick)
             
-            # If ARM-08 was resolved via UI (AI diagnosis), re-inject after cooldown
-            arm8 = robots[7]  # 0-indexed
-            if not arm8.is_fault and tick % 15 == 0:
-                arm8.trigger_anomaly("vibration_fault")
-                call_reducer("inject_anomaly", [8, "vibration_fault"])
-                print(f"  🔴 ARM-08 — PERSISTENT FAULT RE-INJECTED after cooldown")
+            # ARM-08 re-injection with LONG cooldown
+            arm8 = robots[7]
+            if not arm8.is_fault:
+                ticks_since_resolve = tick - arm8.resolved_at_tick
+                if ticks_since_resolve >= ARM8_REINJECT_COOLDOWN:
+                    arm8.trigger_anomaly("vibration_fault")
+                    call_reducer("inject_anomaly", [8, "vibration_fault"])
+                    print(f"  🔴 ARM-08 — Re-injected after {ticks_since_resolve * UPDATE_INTERVAL}s cooldown")
 
             for robot in robots:
-                # Update fixed physics with predictable wobble
                 robot.update_physics(tick)
 
-                # Push deterministic sensor update
+                # Push sensor update
                 call_reducer("update_robot_sensor", [
                     robot.id,
                     round(robot.temp, 2),
@@ -270,17 +242,17 @@ def main():
                 ])
                 updates_sent += 1
 
-                # Evaluate 30-second Auto Resolution (NOT for ARM-08)
-                if robot.needs_auto_resolve and robot.id != 8:
-                    print(f"  🕚 {robot.name} — 30s fault duration elapsed! Auto-resolving anomaly.")
+                # Auto-resolve non-ARM-08 faults after cooldown
+                if robot.is_fault and robot.id != 8 and robot.fault_ticks >= AUTO_RESOLVE_TICKS:
+                    print(f"  🕚 {robot.name} — Auto-resolving after {robot.fault_ticks * UPDATE_INTERVAL}s")
                     call_reducer("resolve_anomaly", [robot.id, "Auto-recovered via timer", "system_timer"])
-                    robot.resolve_anomaly()
+                    robot.resolve_anomaly(tick)
 
                 # Status line
-                status = f"🔴{robot.current_anomaly[:8]}" if robot.is_fault else "🟢ok"
-                print(f"  {robot.name} | {status:8s} | T={robot.temp:5.1f}°C | V={robot.vibration:.3f} | E={robot.energy_kw:5.2f}kW")
+                status = f"🔴{robot.current_anomaly[:8] if robot.current_anomaly else 'fault'}" if robot.is_fault else "🟢ok"
+                print(f"  {robot.name} | {status:14s} | T={robot.temp:5.1f}°C | V={robot.vibration:.3f} | E={robot.energy_kw:5.2f}kW")
 
-                # Energy logging (fixed schedule)
+                # Energy logging
                 if tick % ENERGY_LOG_EVERY == 0:
                     call_reducer("log_energy", [
                         robot.id,
@@ -288,37 +260,33 @@ def main():
                         current_shift,
                     ])
 
-            # Material consumption (fixed schedule)
-            if tick % 20 == 0:
-                mat_id = (tick // 20) % 4 + 1
-                amount = 5.0
+            # Slow material consumption  
+            if tick % 40 == 0:
+                mat_id = (tick // 40) % 4 + 1
                 mat_names = {1: "Steel", 2: "Aluminum", 3: "Copper", 4: "Rubber"}
-                call_reducer("consume_material", [mat_id, amount])
-                print(f"  📦 Consumed fixed {amount}% of {mat_names[mat_id]} for baseline demo")
+                call_reducer("consume_material", [mat_id, 3.0])
+                print(f"  📦 Consumed 3% of {mat_names[mat_id]}")
 
             faults = sum(1 for r in robots if r.is_fault)
 
-            # Random background anomaly occasionally (NOT on ARM-08)
-            if tick % 7 == 0 and faults <= 1:
+            # Background anomaly — MUCH less frequent
+            if tick % BACKGROUND_ANOMALY_EVERY == 0 and faults <= 1:
                 eligible = [r for r in robots if not r.is_fault and r.id != 8]
                 if eligible:
                     arm = random.choice(eligible)
                     atype = random.choice(["vibration_fault", "overheating", "bearing_wear", "motor_fault"])
                     arm.trigger_anomaly(atype)
                     call_reducer("inject_anomaly", [arm.id, atype])
-                    print(f"\n  🎲 DELIBERATE BACKGROUND FAULT TRIGGERED ON {arm.name} ({atype})")
-                    faults += 1
+                    print(f"\n  🎲 BACKGROUND FAULT on {arm.name} ({atype})")
 
-            # Status summary
-            print(f"\n  📊 Updates: {updates_sent} | Active faults: {faults}")
+            print(f"\n  📊 Updates: {updates_sent} | Faults: {faults} | Next anomaly in ~{(BACKGROUND_ANOMALY_EVERY - (tick % BACKGROUND_ANOMALY_EVERY)) * UPDATE_INTERVAL}s")
 
             time.sleep(UPDATE_INTERVAL)
 
     except KeyboardInterrupt:
         print(f"\n\n════════════════════════════════════════")
-        print(f"  Simulator stopped after {tick} ticks")
-        print(f"  Total sensor updates: {updates_sent}")
-        print(f"  Anomalies injected:   {anomalies_injected}")
+        print(f"  Stopped after {tick} ticks ({tick * UPDATE_INTERVAL}s)")
+        print(f"  Total updates: {updates_sent}")
         print(f"════════════════════════════════════════")
         sys.exit(0)
 

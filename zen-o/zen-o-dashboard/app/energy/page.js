@@ -347,55 +347,58 @@ function GridLoadBalancer({ robots }) {
     return { ...r, allocated, loadStatus: status };
   });
 
-  // Generate AI explanation when constrained
+  // Call Ollama AI for real explanation when constrained
+  const fetchAiAnalysis = async () => {
+    setAiLoading(true);
+    setAiExplanation(null);
+    
+    const suspended = assignments.filter(a => a.loadStatus === "SUSPENDED");
+    const partial = assignments.filter(a => a.loadStatus === "PARTIAL");
+    const normal = assignments.filter(a => a.loadStatus === "NORMAL");
+
+    const contextPrompt = `The factory grid is constrained to 40kW (normal: 100kW). 
+Priority: Zone-A > Zone-B.
+Current assignments:
+${normal.map(r => `- ${r.name} (${r.zone}): FULL POWER at ${fmt2(r.allocated)}kW`).join("\n")}
+${partial.map(r => `- ${r.name} (${r.zone}): RESTRICTED to ${fmt2(r.allocated)}kW (needed ${fmt2(Number(r.energyKw))}kW)`).join("\n")}
+${suspended.map(r => `- ${r.name} (${r.zone}): SUSPENDED (needed ${fmt2(Number(r.energyKw))}kW, no capacity left)`).join("\n")}
+
+Explain in 3-4 sentences: Why was power removed from the suspended devices? Why were some restricted? Why did Zone-A keep full power? Include impact on production.`;
+
+    try {
+      const res = await fetch("http://localhost:5001/diagnose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          robot_id: 0,
+          robot_name: "GridController",
+          vibration: 0,
+          temperature: 0,
+          energy_kw: 40,
+          anomaly_type: contextPrompt,
+        }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setAiExplanation(data.recommendation || "AI analysis unavailable.");
+      } else {
+        setAiExplanation("Could not reach AI service. The grid load balancer suspended Zone-B units to protect Zone-A critical assembly stations under the 40kW constraint.");
+      }
+    } catch {
+      setAiExplanation("AI service offline. Power was redistributed based on Zone-A > Zone-B priority protocol to maintain critical production lanes.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!gridConstrained) {
       setAiExplanation(null);
       return;
     }
-    
-    const suspended = assignments.filter(a => a.loadStatus === "SUSPENDED");
-    const partial = assignments.filter(a => a.loadStatus === "PARTIAL");
-    const normal = assignments.filter(a => a.loadStatus === "NORMAL");
-    
-    // Build deterministic AI explanation
-    const explanations = [];
-    
-    if (suspended.length > 0) {
-      explanations.push({
-        type: "SUSPENDED",
-        icon: <PowerOff className="w-4 h-4 text-red-500" />,
-        title: "Power Removed",
-        devices: suspended.map(s => s.name),
-        reason: `Zone-B robots ${suspended.map(s => s.name).join(", ")} have been powered down. These units are classified as lower-priority under the factory's energy triage protocol. Zone-A hosts critical assembly stations with higher throughput requirements.`,
-        impact: `Energy saved: ${suspended.reduce((s, r) => s + Number(r.energyKw), 0).toFixed(1)} kW — redirected to Zone-A primary operations.`
-      });
-    }
-    
-    if (partial.length > 0) {
-      explanations.push({
-        type: "PARTIAL",
-        icon: <Power className="w-4 h-4 text-amber-500" />,
-        title: "Power Restricted",
-        devices: partial.map(p => p.name),
-        reason: `${partial.map(p => p.name).join(", ")} running at reduced capacity (${partial.map(p => `${p.name}: ${fmt2(p.allocated)}kW of ${fmt2(Number(p.energyKw))}kW requested`).join("; ")}). These are the last units before the grid ceiling was hit.`,
-        impact: `Duty cycle reduced to ${partial.map(p => `${((p.allocated / Number(p.energyKw)) * 100).toFixed(0)}%`).join(", ")} — monitoring for thermal drift.`
-      });
-    }
-    
-    if (normal.length > 0) {
-      explanations.push({
-        type: "NORMAL",
-        icon: <Lightbulb className="w-4 h-4 text-green-500" />,
-        title: "Full Power Maintained",
-        devices: normal.map(n => n.name),
-        reason: `Zone-A units ${normal.map(n => n.name).join(", ")} retain full power allocation. These robots operate critical path assembly stations — cutting their power would halt the primary production line and cause cascading delays.`,
-        impact: `Full throughput maintained at ${normal.reduce((s, r) => s + Number(r.energyKw), 0).toFixed(1)} kW total allocation.`
-      });
-    }
-    
-    setAiExplanation(explanations);
-  }, [gridConstrained, robots]);
+    fetchAiAnalysis();
+  }, [gridConstrained]);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm">
@@ -458,33 +461,26 @@ function GridLoadBalancer({ robots }) {
       </div>
 
       {/* AI Explanation Section */}
-      {gridConstrained && aiExplanation && (
+      {gridConstrained && (
         <div className="mt-4 border-t border-gray-200 pt-4">
           <div className="flex items-center gap-2 mb-3">
             <Brain className="w-4 h-4 text-blue-600" />
-            <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">AI Power Distribution Analysis</h3>
+            <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">AI Power Distribution Analysis (Ollama)</h3>
           </div>
           
-          <div className="space-y-3">
-            {aiExplanation.map((exp, idx) => (
-              <div key={idx} className={`rounded-lg border p-3 ${
-                exp.type === "SUSPENDED" ? "bg-red-50/50 border-red-200" :
-                exp.type === "PARTIAL" ? "bg-amber-50/50 border-amber-200" :
-                "bg-green-50/50 border-green-200"
-              }`}>
-                <div className="flex items-center gap-2 mb-2">
-                  {exp.icon}
-                  <span className="text-xs font-bold text-gray-800">{exp.title}</span>
-                  <ArrowRight className="w-3 h-3 text-gray-400" />
-                  <span className="text-[10px] font-mono font-bold text-gray-600">{exp.devices.join(", ")}</span>
-                </div>
-                <p className="text-[10px] text-gray-600 leading-relaxed mb-1.5">{exp.reason}</p>
-                <p className="text-[10px] font-medium text-gray-500 italic flex items-center gap-1">
-                  <Zap className="w-3 h-3 text-amber-500" /> {exp.impact}
-                </p>
-              </div>
-            ))}
-          </div>
+          {aiLoading ? (
+            <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <svg className="animate-spin h-5 w-5 text-blue-600" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <p className="text-xs text-blue-700 font-medium">Analyzing power distribution with Ollama AI...</p>
+            </div>
+          ) : aiExplanation ? (
+            <div className="bg-blue-50/50 border border-blue-200 rounded-lg p-4">
+              <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{aiExplanation}</p>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
