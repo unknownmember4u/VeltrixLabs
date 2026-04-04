@@ -490,8 +490,8 @@ export default function ZenOLandingPage() {
             </FadeIn>
 
             {/* Giant watermark */}
-            <div className="absolute bottom-0 left-0 right-0 overflow-hidden pointer-events-none select-none z-0 flex justify-center translate-y-[35%] opacity-[0.02]">
-              <h2 className="text-[18vw] font-black tracking-tighter text-[#000000] whitespace-nowrap">STELLAR STATE</h2>
+            <div className="absolute bottom-0 left-0 right-0 overflow-hidden pointer-events-none select-none z-0 flex justify-center items-end translate-y-[28%] opacity-[0.02]">
+              <h2 className="text-[12vw] font-black tracking-tighter text-[#000000] whitespace-nowrap leading-none">STELLAR STATE</h2>
             </div>
           </footer>
         </main>

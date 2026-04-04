@@ -1,6 +1,8 @@
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
+import { auth } from '@/lib/firebase/config';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -29,9 +31,9 @@ const FormInput = ({ icon, type, placeholder, value, onChange, required }) => {
     );
 };
 
-const SocialButton = ({ icon, name }) => {
+const SocialButton = ({ icon, name, onClick }) => {
     return (
-        <button type="button" className="flex items-center justify-center w-full max-w-[200px] p-3 bg-white/10 border border-white/20 rounded-xl text-white/80 hover:bg-white/20 hover:text-white transition-all shadow-sm hover:shadow">
+        <button type="button" onClick={onClick} className="flex items-center justify-center w-full max-w-[200px] p-3 bg-white/10 border border-white/20 rounded-xl text-white/80 hover:bg-white/20 hover:text-white transition-all shadow-sm hover:shadow">
             {icon}
             {name && <span className="ml-2 font-medium">{name}</span>}
         </button>
@@ -89,22 +91,76 @@ const LoginForm = ({ onSubmit, onClose }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [remember, setRemember] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [error, setError] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
+
+        if (!isLogin && password !== confirmPassword) {
+            setError('Passwords do not match.');
+            return;
+        }
+        if (!isLogin && password.length < 6) {
+            setError('Password must be at least 6 characters.');
+            return;
+        }
+
         setIsSubmitting(true);
+        
+        try {
+            let result;
+            if (isLogin) {
+                result = await signInWithEmailAndPassword(auth, email, password);
+            } else {
+                result = await createUserWithEmailAndPassword(auth, email, password);
+                if (name.trim()) {
+                    await updateProfile(result.user, { displayName: name.trim() });
+                }
+            }
+            setIsSuccess(true);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            if (onSubmit) onSubmit({ user: result.user });
+        } catch (err) {
+            console.error('Auth error:', err);
+            const messages = {
+                'auth/invalid-email': 'Invalid email address.',
+                'auth/user-not-found': 'No account found. Try signing up instead.',
+                'auth/wrong-password': 'Incorrect password.',
+                'auth/invalid-credential': 'Invalid email or password.',
+                'auth/email-already-in-use': 'This email is already registered. Switching to Sign In...',
+                'auth/weak-password': 'Password must be at least 6 characters.',
+                'auth/too-many-requests': 'Too many attempts. Please try again later.',
+            };
+            setError(messages[err.code] || err.message);
 
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setIsSuccess(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        if (onSubmit) onSubmit({ email, password, remember, name, isLogin });
+            // Auto-switch to sign in if email already exists
+            if (err.code === 'auth/email-already-in-use') {
+                setTimeout(() => setIsLogin(true), 1500);
+            }
+            // Auto-switch to sign up if user not found
+            if (err.code === 'auth/user-not-found') {
+                setTimeout(() => setIsLogin(false), 1500);
+            }
+        }
+        
         setIsSubmitting(false);
         setIsSuccess(false);
+    };
+
+    const handleGoogleSignIn = async () => {
+        try {
+            const provider = new GoogleAuthProvider();
+            const result = await signInWithPopup(auth, provider);
+            if (onSubmit) onSubmit({ user: result.user });
+        } catch (err) {
+            console.error('Google Sign-In Error:', err);
+            setError(err.message);
+        }
     };
 
     return (
@@ -131,10 +187,16 @@ const LoginForm = ({ onSubmit, onClose }) => {
                 </div>
             </div>
 
+            {error && (
+                <div className="mb-4 px-4 py-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-200 text-sm font-medium text-center">
+                    {error}
+                </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
                 {!isLogin && (
                     <FormInput
-                        icon={<span className="text-white/40 font-bold ml-1 flex items-center justify-center">@</span>}
+                        icon={<User className="text-white/40" size={18} />}
                         type="text"
                         placeholder="Full name"
                         value={name}
@@ -171,34 +233,27 @@ const LoginForm = ({ onSubmit, onClose }) => {
                     </button>
                 </div>
 
-                {isLogin && (
-                    <div className="flex items-center pb-4 pt-2">
-                        <div className="flex items-center space-x-2">
-                            <ToggleSwitch
-                                checked={remember}
-                                onChange={() => setRemember(!remember)}
-                                id="remember-me"
-                            />
-                            <label
-                                htmlFor="remember-me"
-                                className="text-sm font-medium text-white/70 cursor-pointer hover:text-white transition-colors select-none"
-                            >
-                                Remember me
-                            </label>
-                        </div>
-                    </div>
+                {!isLogin && (
+                    <FormInput
+                        icon={<Lock className="text-white/40" size={18} />}
+                        type="password"
+                        placeholder="Confirm password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                    />
                 )}
 
                 <button
                     type="submit"
                     disabled={isSubmitting}
                     className={`w-full py-3 rounded-xl ${isSuccess
-                            ? 'bg-green-500 text-white'
-                            : 'bg-white hover:bg-white/90 text-black'
-                        } font-bold transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed`}
+                        ? 'bg-green-500 text-white'
+                        : 'bg-white hover:bg-white/90 text-black'
+                    } font-bold transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed`}
                 >
                     {isSubmitting 
-                        ? (isLogin ? 'Authenticating...' : 'Creating account...') 
+                        ? (isLogin ? 'Signing in...' : 'Creating account...') 
                         : (isLogin ? 'Sign In' : 'Create Account')
                     }
                 </button>
@@ -213,7 +268,7 @@ const LoginForm = ({ onSubmit, onClose }) => {
                 </div>
 
                 <div className="mt-6 flex justify-center w-full">
-                    <SocialButton icon={<GoogleIcon />} name="Google" />
+                    <SocialButton onClick={handleGoogleSignIn} icon={<GoogleIcon />} name="Google" />
                 </div>
             </div>
 
@@ -221,7 +276,7 @@ const LoginForm = ({ onSubmit, onClose }) => {
                 {isLogin ? "Don't have an account? " : "Already have an account? "}
                 <button 
                     type="button" 
-                    onClick={() => setIsLogin(!isLogin)} 
+                    onClick={() => { setIsLogin(!isLogin); setError(''); }} 
                     className="font-bold text-white hover:underline transition-all"
                 >
                     {isLogin ? "Sign up" : "Sign in"}
