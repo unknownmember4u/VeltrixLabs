@@ -23,7 +23,7 @@ const FormInput = ({ icon, type, placeholder, value, onChange, required }) => {
                 value={value}
                 onChange={onChange}
                 required={required}
-                className="w-full pl-10 pr-3 py-3 bg-white/20 border border-black/10 rounded-xl text-black placeholder-black/40 focus:outline-none focus:border-black/30 focus:bg-white/40 transition-colors shadow-sm"
+                className="w-full pl-10 pr-3 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-white/40 focus:bg-white/20 transition-colors shadow-sm"
             />
         </div>
     );
@@ -31,7 +31,7 @@ const FormInput = ({ icon, type, placeholder, value, onChange, required }) => {
 
 const SocialButton = ({ icon, name }) => {
     return (
-        <button type="button" className="flex items-center justify-center w-full max-w-[200px] p-3 bg-white/30 border border-black/10 rounded-xl text-black/80 hover:bg-white/60 hover:text-black transition-all shadow-sm hover:shadow">
+        <button type="button" className="flex items-center justify-center w-full max-w-[200px] p-3 bg-white/10 border border-white/20 rounded-xl text-white/80 hover:bg-white/20 hover:text-white transition-all shadow-sm hover:shadow">
             {icon}
             {name && <span className="ml-2 font-medium">{name}</span>}
         </button>
@@ -48,8 +48,8 @@ const ToggleSwitch = ({ checked, onChange, id }) => {
                 checked={checked}
                 onChange={onChange}
             />
-            <div className={`absolute inset-0 rounded-full transition-colors duration-200 ease-in-out pointer-events-none ${checked ? 'bg-black' : 'bg-black/20'}`}>
-                <div className={`absolute left-0.5 top-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-200 ease-in-out shadow-sm ${checked ? 'transform translate-x-5' : ''}`} />
+            <div className={`absolute inset-0 rounded-full transition-colors duration-200 ease-in-out pointer-events-none ${checked ? 'bg-white' : 'bg-white/20'}`}>
+                <div className={`absolute left-0.5 top-0.5 w-4 h-4 rounded-full bg-black transition-transform duration-200 ease-in-out shadow-sm ${checked ? 'transform translate-x-5' : ''}`} />
             </div>
         </div>
     );
@@ -112,7 +112,7 @@ const LoginForm = ({ onSubmit, onClose }) => {
             {onClose && (
                 <button 
                   onClick={onClose}
-                  className="absolute top-4 right-4 text-black/40 hover:text-black transition-colors p-1"
+                  className="absolute top-4 right-4 text-white/40 hover:text-white transition-colors p-1"
                   aria-label="Close"
                   type="button"
                 >
@@ -121,10 +121,10 @@ const LoginForm = ({ onSubmit, onClose }) => {
             )}
             
             <div className="mb-8 text-center pt-2">
-                <h2 className="text-3xl font-extrabold mb-2 relative group inline-block tracking-tight text-black">
+                <h2 className="text-3xl font-extrabold mb-2 relative group inline-block tracking-tight text-white">
                     Stellar State
                 </h2>
-                <div className="text-black/60 flex flex-col items-center space-y-1 mt-1">
+                <div className="text-white/60 flex flex-col items-center space-y-1 mt-1">
                     <span className="text-sm font-medium">
                         {isLogin ? "Log in to the dashboard" : "Create a new account"}
                     </span>
@@ -134,7 +134,7 @@ const LoginForm = ({ onSubmit, onClose }) => {
             <form onSubmit={handleSubmit} className="space-y-4">
                 {!isLogin && (
                     <FormInput
-                        icon={<span className="text-black/40 font-bold ml-1 flex items-center justify-center">@</span>}
+                        icon={<span className="text-white/40 font-bold ml-1 flex items-center justify-center">@</span>}
                         type="text"
                         placeholder="Full name"
                         value={name}
@@ -144,7 +144,7 @@ const LoginForm = ({ onSubmit, onClose }) => {
                 )}
 
                 <FormInput
-                    icon={<Mail className="text-black/40" size={18} />}
+                    icon={<Mail className="text-white/40" size={18} />}
                     type="email"
                     placeholder="Email address"
                     value={email}
@@ -154,7 +154,7 @@ const LoginForm = ({ onSubmit, onClose }) => {
 
                 <div className="relative">
                     <FormInput
-                        icon={<Lock className="text-black/40" size={18} />}
+                        icon={<Lock className="text-white/40" size={18} />}
                         type={showPassword ? "text" : "password"}
                         placeholder="Password"
                         value={password}
@@ -163,7 +163,7 @@ const LoginForm = ({ onSubmit, onClose }) => {
                     />
                     <button
                         type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black focus:outline-none transition-colors"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white focus:outline-none transition-colors"
                         onClick={() => setShowPassword(!showPassword)}
                         aria-label={showPassword ? "Hide password" : "Show password"}
                     >
@@ -181,7 +181,7 @@ const LoginForm = ({ onSubmit, onClose }) => {
                             />
                             <label
                                 htmlFor="remember-me"
-                                className="text-sm font-medium text-black/70 cursor-pointer hover:text-black transition-colors select-none"
+                                className="text-sm font-medium text-white/70 cursor-pointer hover:text-white transition-colors select-none"
                             >
                                 Remember me
                             </label>
@@ -193,9 +193,9 @@ const LoginForm = ({ onSubmit, onClose }) => {
                     type="submit"
                     disabled={isSubmitting}
                     className={`w-full py-3 rounded-xl ${isSuccess
-                            ? 'bg-green-500'
-                            : 'bg-black hover:bg-[#222]'
-                        } text-white font-semibold transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed`}
+                            ? 'bg-green-500 text-white'
+                            : 'bg-white hover:bg-white/90 text-black'
+                        } font-bold transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed`}
                 >
                     {isSubmitting 
                         ? (isLogin ? 'Authenticating...' : 'Creating account...') 
@@ -206,8 +206,8 @@ const LoginForm = ({ onSubmit, onClose }) => {
 
             <div className="mt-8">
                 <div className="relative flex items-center justify-center">
-                    <div className="border-t border-black/10 absolute w-full"></div>
-                    <div className="px-4 relative text-black/40 text-xs font-bold uppercase tracking-wider bg-transparent">
+                    <div className="border-t border-white/20 absolute w-full"></div>
+                    <div className="px-4 relative text-white/40 text-xs font-bold uppercase tracking-wider bg-transparent">
                         Or continue with
                     </div>
                 </div>
@@ -217,12 +217,12 @@ const LoginForm = ({ onSubmit, onClose }) => {
                 </div>
             </div>
 
-            <p className="mt-8 text-center text-sm font-medium text-black/60">
+            <p className="mt-8 text-center text-sm font-medium text-white/60">
                 {isLogin ? "Don't have an account? " : "Already have an account? "}
                 <button 
                     type="button" 
                     onClick={() => setIsLogin(!isLogin)} 
-                    className="font-bold text-black hover:underline transition-all"
+                    className="font-bold text-white hover:underline transition-all"
                 >
                     {isLogin ? "Sign up" : "Sign in"}
                 </button>
