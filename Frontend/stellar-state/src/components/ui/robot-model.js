@@ -13,7 +13,7 @@ export function RobotModel({ className = '' }) {
 
     // 1. Setup Scene, Camera, Renderer
     const scene = new THREE.Scene();
-    
+
     // Transparent background
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
@@ -36,7 +36,7 @@ export function RobotModel({ className = '' }) {
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
     directionalLight.position.set(10, 20, 10);
     scene.add(directionalLight);
-    
+
     const backLight = new THREE.DirectionalLight(0xffffff, 0.6);
     backLight.position.set(-10, 10, -10);
     scene.add(backLight);
@@ -54,7 +54,7 @@ export function RobotModel({ className = '' }) {
     controls.enableZoom = false; // Disable scroll hijack 
     controls.enablePan = false; // Keep it fixed in place
     // Lock the camera strictly to a flat horizontal orbit (90 degrees standing)
-    controls.minPolarAngle = Math.PI / 2; 
+    controls.minPolarAngle = Math.PI / 2;
     controls.maxPolarAngle = Math.PI / 2;
 
     // 4. Load OBJ
@@ -63,11 +63,11 @@ export function RobotModel({ className = '' }) {
       '/OBJ_Robot.obj',
       (object) => {
         setIsLoading(false);
-        
+
         // Ensure accurate scaling first
         const initialBox = new THREE.Box3().setFromObject(object);
         const initialSize = initialBox.getSize(new THREE.Vector3());
-        
+
         // Target a max bounding dimension of 18 units to fill the space well
         const maxDim = Math.max(initialSize.x, initialSize.y, initialSize.z);
         const scale = 18 / maxDim;
@@ -76,25 +76,25 @@ export function RobotModel({ className = '' }) {
         // Center the scaled object exactly at origin (0,0,0) so rotation is perfect
         const scaledBox = new THREE.Box3().setFromObject(object);
         const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
-        
+
         object.position.x = -scaledCenter.x;
         object.position.y = -scaledCenter.y;
         object.position.z = -scaledCenter.z;
-        
+
         // Apply a clean, techy metallic material to all meshes
-        const material = new THREE.MeshStandardMaterial({ 
-            color: 0x99aab5, 
-            metalness: 0.7, 
-            roughness: 0.3,
-            side: THREE.DoubleSide
+        const material = new THREE.MeshStandardMaterial({
+          color: 0x99aab5,
+          metalness: 0.7,
+          roughness: 0.3,
+          side: THREE.DoubleSide
         });
-        
+
         object.traverse((child) => {
-            if (child.isMesh) {
-                child.material = material;
-                child.castShadow = true;
-                child.receiveShadow = true;
-            }
+          if (child.isMesh) {
+            child.material = material;
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
         });
 
         scene.add(object);
@@ -122,7 +122,7 @@ export function RobotModel({ className = '' }) {
       if (!mountRef.current) return;
       const width = mountRef.current.clientWidth;
       const height = mountRef.current.clientHeight;
-      
+
       renderer.setSize(width, height);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
