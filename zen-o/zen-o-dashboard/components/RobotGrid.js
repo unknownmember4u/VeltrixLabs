@@ -248,7 +248,7 @@ function RobotCard({ robot, onClick }) {
 // ─── MAIN GRID ────────────────────────────────────────────────────────
 
 export default function RobotGrid() {
-  const robots = useRobots();
+  const robots = useRobots().sort((a, b) => a.id - b.id);
   const [modalRobot, setModalRobot] = useState(null);
 
   if (robots.length === 0) return null;

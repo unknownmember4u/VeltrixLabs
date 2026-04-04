@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { href: "/",           label: "Dashboard" },
   { href: "/energy",     label: "Energy" },
   { href: "/simulation", label: "Simulation Lab" },
+  { href: "/supply",     label: "Supply Chain" },
 ];
 
 export default function NavBar() {

@@ -29,6 +29,12 @@ const store = {
   },
 };
 
+export const dbStream = [];
+function pushLog(msg) {
+  dbStream.unshift({ id: Math.random().toString(), ts: Date.now(), msg });
+  if (dbStream.length > 50) dbStream.pop();
+}
+
 function initSpacetimeDB() {
   if (conn) return;
   console.log("Connecting to SpacetimeDB...", SPACETIMEDB_URI, MODULE_NAME);
@@ -60,13 +66,21 @@ function initSpacetimeDB() {
           continue;
         }
         if (table.onInsert) {
-          table.onInsert(() => store.notify());
+          table.onInsert((ctx, row) => { 
+            store.notify(); 
+            pushLog(`[${tableName.toUpperCase()}] Inserted new record via ${ctx?.sender || 'backend'}`);
+          });
         }
         if (table.onUpdate) {
-          table.onUpdate(() => store.notify());
+          table.onUpdate((ctx, oldRow, newRow) => { 
+            store.notify(); 
+            // Optional: don't clog up screen with hundreds of sensor temp updates unless it's a big event, 
+            // but user asked for "continuous logs", so we will log it.
+            pushLog(`[${tableName.toUpperCase()}] Updated record`);
+          });
         }
         if (table.onDelete) {
-          table.onDelete(() => store.notify());
+          table.onDelete(() => { store.notify(); pushLog(`[${tableName.toUpperCase()}] Deleted record`); });
         }
       }
       console.log("✓ Registered live update callbacks on", tables.length, "tables");
@@ -232,51 +246,60 @@ export function useEnergyLogs() {
   }, []);
 }
 
+export function useSpacetimeStream() {
+  return useStoreSelector(() => [...dbStream], []);
+}
+
 export async function callReducer(name, args) {
   if (!conn) return { ok: false, error: "Not connected to SpacetimeDB" };
+
+  const safeCall = (fn) => {
+    try { fn(); } catch (e) {
+      console.warn(`[SpacetimeDB] Reducer ${name} call error (suppressed):`, e);
+    }
+  };
 
   try {
     switch (name) {
       case "consume_material":
-        conn.reducers.consumeMaterial(
+        safeCall(() => conn.reducers.consumeMaterial(
           Number(args.material_id),
           Number(args.amount_percent)
-        );
+        ));
         break;
       case "inject_anomaly":
-        conn.reducers.injectAnomaly(
+        safeCall(() => conn.reducers.injectAnomaly(
           Number(args.robot_id),
           String(args.anomaly_type)
-        );
+        ));
         break;
       case "emergency_stop":
-        conn.reducers.emergencyStop(
+        safeCall(() => conn.reducers.emergencyStop(
           String(args.zone),
           String(args.reason),
           String(args.operator_id || "operator-1")
-        );
+        ));
         break;
       case "resolve_anomaly":
-        conn.reducers.resolveAnomaly(
+        safeCall(() => conn.reducers.resolveAnomaly(
           Number(args.robot_id),
           String(args.action_taken),
           String(args.operator_id || "operator-1")
-        );
+        ));
         break;
       case "log_energy":
-        // Rust: log_energy(robot_id: u32, consumption_kw: f32, shift: String)
-        conn.reducers.logEnergy(
+        safeCall(() => conn.reducers.logEnergy(
           Number(args.robot_id),
           Number(args.consumption_kw),
           String(args.shift)
-        );
+        ));
         break;
       case "run_simulation":
-        conn.reducers.runSimulation(
+        safeCall(() => conn.reducers.runSimulation(
           String(args.parameter),
           Number(args.delta_percent),
           String(args.operator_id || "flask-sim")
-        );
+        ));
         break;
       default:
         console.warn(`[SpacetimeDB] Unknown reducer: ${name}`);

@@ -19,10 +19,10 @@ const FLASK_URL = "http://localhost:5001";
 // ─── SCENARIO PRESETS ─────────────────────────────────────────────────────────
 
 const PRESETS = [
-  { label: "Add Shift +8hrs",        icon: "⏱",  parameter: "shift_hours",   delta: 15  },
-  { label: "Increase Conveyor +20%", icon: "⚙",  parameter: "conveyor_speed", delta: 20  },
-  { label: "Reduce Temp −10°C",      icon: "🌡",  parameter: "temp_setpoint",  delta: -10 },
-  { label: "Add Robot to Zone 2",    icon: "🤖",  parameter: "zone2_robots",   delta: 12  },
+  { label: "Zone A: +8hrs",          icon: "⏱",  parameter: "zone_a_shift",   delta: 15  },
+  { label: "Zone A: Conveyor +20%",  icon: "⚙",  parameter: "zone_a_conveyor", delta: 20  },
+  { label: "Zone B: Temp −10°C",     icon: "🌡",  parameter: "zone_b_temp",  delta: -10 },
+  { label: "Zone B: Run Overclock",  icon: "🤖",  parameter: "zone_b_clock",   delta: 12  },
 ];
 
 // ─── RISK GAUGE ───────────────────────────────────────────────────────────────
@@ -40,6 +40,49 @@ function RiskGauge({ score }) {
       <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{ width: `${pct}%` }} />
       </div>
+    </div>
+  );
+}
+
+// ─── PDF UPLOAD COMPONENT ───────────────────────────────────────────────────
+
+function PdfUpload() {
+  const [uploading, setUploading] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setMsg("Uploading...");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`${FLASK_URL}/upload_pdf`, { method: "POST", body: fd });
+      if (res.ok) {
+        const data = await res.json();
+        setMsg(`✓ RAG updated: ${data.chunks_added} new chunks.`);
+      } else {
+        setMsg("✗ Upload failed.");
+      }
+    } catch {
+      setMsg("✗ Error connecting to AI Service.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="bg-gray-800 rounded-xl border border-gray-700 p-3 flex items-center gap-4">
+      <div>
+        <h3 className="text-xs font-semibold text-gray-300">Ollama RAG Context</h3>
+        <p className="text-[10px] text-gray-500">Upload PDF manuals so Ollama can analyze specific machines.</p>
+      </div>
+      <label className="ml-auto flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg cursor-pointer transition-colors">
+        {uploading ? "Processing..." : "📄 Upload PDF"}
+        <input type="file" accept=".pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
+      </label>
+      {msg && <span className="text-[10px] text-gray-400 font-mono">{msg}</span>}
     </div>
   );
 }
@@ -298,7 +341,9 @@ export default function SimulationPage() {
   const robots  = useRobots();
   const sims    = useSimulations();
 
-  const [activePreset, setActivePreset] = useState(null);
+  const [presetA, setPresetA] = useState(null);
+  const [presetB, setPresetB] = useState(null);
+  
   const [resultA, setResultA] = useState(null);
   const [resultB, setResultB] = useState(null);
 
@@ -325,34 +370,44 @@ export default function SimulationPage() {
           <p className="text-xs text-gray-500">Model parameter changes before applying to the factory floor</p>
         </div>
 
+        <PdfUpload />
+
         {/* Section A — Presets */}
         <div>
-          <p className="text-[10px] text-gray-500 uppercase font-semibold mb-2">Scenario Presets</p>
+          <p className="text-[10px] text-gray-500 uppercase font-semibold mb-2">Scenario Presets (Select for A or B)</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {PRESETS.map((p) => (
-              <button
-                key={p.label}
-                onClick={() => setActivePreset(activePreset?.label === p.label ? null : p)}
-                className={`rounded-xl border p-3 text-left transition-all ${
-                  activePreset?.label === p.label
-                    ? "bg-blue-600/20 border-blue-500/50 text-blue-300"
-                    : "bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600"
-                }`}
-              >
-                <span className="text-xl block mb-1">{p.icon}</span>
-                <p className="text-xs font-semibold leading-tight">{p.label}</p>
-                <p className="text-[10px] text-gray-500 font-mono mt-1">
-                  {p.parameter}: {p.delta > 0 ? "+" : ""}{p.delta}%
-                </p>
-              </button>
+              <div key={p.label} className="bg-gray-800 border border-gray-700 rounded-xl p-3 flex flex-col justify-between">
+                <div>
+                  <span className="text-xl block mb-1">{p.icon}</span>
+                  <p className="text-xs font-semibold leading-tight text-white">{p.label}</p>
+                  <p className="text-[10px] text-gray-500 font-mono mt-1">
+                    {p.parameter}: {p.delta > 0 ? "+" : ""}{p.delta}%
+                  </p>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <button 
+                    onClick={() => setPresetA(p)}
+                    className={`flex-1 text-[10px] font-bold py-1 rounded transition-colors ${presetA?.label === p.label ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-400 hover:bg-gray-600"}`}
+                  >
+                    Set A
+                  </button>
+                  <button 
+                    onClick={() => setPresetB(p)}
+                    className={`flex-1 text-[10px] font-bold py-1 rounded transition-colors ${presetB?.label === p.label ? "bg-purple-600 text-white" : "bg-gray-700 text-gray-400 hover:bg-gray-600"}`}
+                  >
+                    Set B
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </div>
 
         {/* Section B — Side-by-side simulator */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <SimPanel label="Simulation A" preset={activePreset} robots={robots} onResult={setResultA} />
-          <SimPanel label="Simulation B" preset={null}         robots={robots} onResult={setResultB} />
+          <SimPanel label="Simulation A" preset={presetA} robots={robots} onResult={setResultA} />
+          <SimPanel label="Simulation B" preset={presetB} robots={robots} onResult={setResultB} />
         </div>
 
         {/* Comparison summary */}

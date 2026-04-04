@@ -149,11 +149,7 @@ fn get_latest_audit_hash(ctx: &ReducerContext) -> String {
 
 fn check_material_levels(ctx: &ReducerContext) {
     for material in ctx.db.material().iter() {
-        if material.quantity_percent < 5.0 {
-            let prev_hash = get_latest_audit_hash(ctx);
-            let payload = format!("PO generated for {}", material.name);
-            let hash = compute_hash("PO_AUTO_GENERATED", 0, &payload, &prev_hash);
-
+        if material.quantity_percent <= 15.0 {
             let _ = ctx.db.purchase_order().insert(PurchaseOrder {
                 id: 0,
                 material_name: material.name.clone(),
@@ -161,13 +157,69 @@ fn check_material_levels(ctx: &ReducerContext) {
                 supplier_code: "SUP-001".to_string(),
                 status: "PENDING".to_string(),
                 created_at: ctx.timestamp,
-                hash: hash.clone(),
+                hash: "auto-generated-po".to_string(),
             });
+            // We no longer put this in audit_log, so the hash chain focuses only on errors
+        }
+    }
+}
+
+// ─── REDUCERS ─────────────────────────────────────────────────────────
+
+#[spacetimedb::reducer]
+pub fn update_robot_sensor(ctx: &ReducerContext, robot_id: u32, temp: f32, vibration: f32, energy_kw: f32) {
+    if let Some(mut robot) = ctx.db.robot().id().find(*&robot_id) {
+        robot.temperature = temp;
+        robot.vibration = vibration;
+        robot.energy_kw = energy_kw;
+        robot.last_updated = ctx.timestamp;
+
+        // If vibration exceeds safety threshold, it's a fault.
+        // However, if the status is ALREADY "fault" (e.g. manually injected by UI), 
+        // DO NOT implicitly resolve it back to "active" just because readings are temporarily low!
+        // It must be explicitly resolved via `resolve_anomaly` reducer.
+        let is_fault = vibration > 0.85;
+        if is_fault {
+            robot.status = "fault".to_string();
+        } else if robot.status != "fault" {
+            robot.status = "active".to_string();
+        }
+
+        let _ = ctx.db.robot().id().update(robot.clone());
+
+        let _ = ctx.db.sensor_reading().insert(SensorReading {
+            id: 0,
+            robot_id,
+            reading_type: "temperature".to_string(),
+            value: temp,
+            timestamp: ctx.timestamp,
+        });
+
+        let _ = ctx.db.sensor_reading().insert(SensorReading {
+            id: 0,
+            robot_id,
+            reading_type: "vibration".to_string(),
+            value: vibration,
+            timestamp: ctx.timestamp,
+        });
+
+        let _ = ctx.db.sensor_reading().insert(SensorReading {
+            id: 0,
+            robot_id,
+            reading_type: "energy_kw".to_string(),
+            value: energy_kw,
+            timestamp: ctx.timestamp,
+        });
+
+        if is_fault {
+            let prev_hash = get_latest_audit_hash(ctx);
+            let payload = format!("vibration={},temp={}", vibration, temp);
+            let hash = compute_hash("ANOMALY_DETECTED", robot_id, &payload, &prev_hash);
 
             let _ = ctx.db.audit_log().insert(AuditLog {
                 id: 0,
-                event_type: "PO_AUTO_GENERATED".to_string(),
-                robot_id: 0,
+                event_type: "ANOMALY_DETECTED".to_string(),
+                robot_id,
                 payload,
                 hash,
                 prev_hash,
@@ -178,142 +230,78 @@ fn check_material_levels(ctx: &ReducerContext) {
     }
 }
 
-// ─── REDUCERS ─────────────────────────────────────────────────────────
-
 #[spacetimedb::reducer]
-pub fn update_robot_sensor(ctx: &ReducerContext, robot_id: u32, temp: f32, vibration: f32, energy_kw: f32) -> Result<(), String> {
-    let mut robot = ctx.db.robot().id().find(*&robot_id).ok_or("Robot not found")?;
+pub fn inject_anomaly(ctx: &ReducerContext, robot_id: u32, anomaly_type: String) {
+    if let Some(mut robot) = ctx.db.robot().id().find(*&robot_id) {
+        robot.status = "fault".to_string();
+        let _ = ctx.db.robot().id().update(robot);
 
-    robot.temperature = temp;
-    robot.vibration = vibration;
-    robot.energy_kw = energy_kw;
-    robot.last_updated = ctx.timestamp;
-
-    let is_fault = vibration > 0.85;
-    robot.status = if is_fault { "fault".to_string() } else { "active".to_string() };
-
-    let _ = ctx.db.robot().id().update(robot);
-
-    let _ = ctx.db.sensor_reading().insert(SensorReading {
-        id: 0,
-        robot_id,
-        reading_type: "temperature".to_string(),
-        value: temp,
-        timestamp: ctx.timestamp,
-    });
-
-    let _ = ctx.db.sensor_reading().insert(SensorReading {
-        id: 0,
-        robot_id,
-        reading_type: "vibration".to_string(),
-        value: vibration,
-        timestamp: ctx.timestamp,
-    });
-
-    let _ = ctx.db.sensor_reading().insert(SensorReading {
-        id: 0,
-        robot_id,
-        reading_type: "energy_kw".to_string(),
-        value: energy_kw,
-        timestamp: ctx.timestamp,
-    });
-
-    if is_fault {
         let prev_hash = get_latest_audit_hash(ctx);
-        let payload = format!("vibration={},temp={}", vibration, temp);
-        let hash = compute_hash("ANOMALY_DETECTED", robot_id, &payload, &prev_hash);
+        let hash = compute_hash("ANOMALY_INJECTED", robot_id, &anomaly_type, &prev_hash);
 
         let _ = ctx.db.audit_log().insert(AuditLog {
             id: 0,
-            event_type: "ANOMALY_DETECTED".to_string(),
+            event_type: "ANOMALY_INJECTED".to_string(),
             robot_id,
-            payload,
+            payload: anomaly_type,
             hash,
             prev_hash,
             operator_id: ctx.sender.to_string(),
             timestamp: ctx.timestamp,
         });
     }
-
-    Ok(())
 }
 
 #[spacetimedb::reducer]
-pub fn inject_anomaly(ctx: &ReducerContext, robot_id: u32, anomaly_type: String) -> Result<(), String> {
-    let mut robot = ctx.db.robot().id().find(*&robot_id).ok_or("Robot not found")?;
-    robot.status = "fault".to_string();
-    let _ = ctx.db.robot().id().update(robot);
+pub fn resolve_anomaly(ctx: &ReducerContext, robot_id: u32, action_taken: String, operator_id: String) {
+    if let Some(mut robot) = ctx.db.robot().id().find(*&robot_id) {
+        robot.status = "active".to_string();
+        let _ = ctx.db.robot().id().update(robot);
 
-    let prev_hash = get_latest_audit_hash(ctx);
-    let hash = compute_hash("ANOMALY_INJECTED", robot_id, &anomaly_type, &prev_hash);
+        let _ = ctx.db.maintenance_action().insert(MaintenanceAction {
+            id: 0,
+            robot_id,
+            action: "resolution".to_string(),
+            manual_reference: "".to_string(),
+            torque_spec: "".to_string(),
+            estimated_minutes: 0,
+            status: "completed".to_string(),
+            assigned_to: operator_id.clone(),
+        });
 
-    let _ = ctx.db.audit_log().insert(AuditLog {
-        id: 0,
-        event_type: "ANOMALY_INJECTED".to_string(),
-        robot_id,
-        payload: anomaly_type,
-        hash,
-        prev_hash,
-        operator_id: ctx.sender.to_string(),
-        timestamp: ctx.timestamp,
-    });
+        let prev_hash = get_latest_audit_hash(ctx);
+        let hash = compute_hash("ANOMALY_RESOLVED", robot_id, &action_taken, &prev_hash);
 
-    Ok(())
-}
-
-#[spacetimedb::reducer]
-pub fn resolve_anomaly(ctx: &ReducerContext, robot_id: u32, action_taken: String, operator_id: String) -> Result<(), String> {
-    let mut robot = ctx.db.robot().id().find(*&robot_id).ok_or("Robot not found")?;
-    robot.status = "active".to_string();
-    let _ = ctx.db.robot().id().update(robot);
-
-    let _ = ctx.db.maintenance_action().insert(MaintenanceAction {
-        id: 0,
-        robot_id,
-        action: "resolution".to_string(),
-        manual_reference: "".to_string(),
-        torque_spec: "".to_string(),
-        estimated_minutes: 0,
-        status: "completed".to_string(),
-        assigned_to: operator_id.clone(),
-    });
-
-    let prev_hash = get_latest_audit_hash(ctx);
-    let hash = compute_hash("ANOMALY_RESOLVED", robot_id, &action_taken, &prev_hash);
-
-    let _ = ctx.db.audit_log().insert(AuditLog {
-        id: 0,
-        event_type: "ANOMALY_RESOLVED".to_string(),
-        robot_id,
-        payload: action_taken,
-        hash,
-        prev_hash,
-        operator_id,
-        timestamp: ctx.timestamp,
-    });
-
-    Ok(())
-}
-
-#[spacetimedb::reducer]
-pub fn consume_material(ctx: &ReducerContext, material_id: u32, amount_percent: f32) -> Result<(), String> {
-    let mut material = ctx.db.material().id().find(*&material_id).ok_or("Material not found")?;
-
-    material.quantity_percent -= amount_percent;
-    if material.quantity_percent < 0.0 {
-        material.quantity_percent = 0.0;
+        let _ = ctx.db.audit_log().insert(AuditLog {
+            id: 0,
+            event_type: "ANOMALY_RESOLVED".to_string(),
+            robot_id,
+            payload: action_taken,
+            hash,
+            prev_hash,
+            operator_id,
+            timestamp: ctx.timestamp,
+        });
     }
-    material.last_updated = ctx.timestamp;
-    let _ = ctx.db.material().id().update(material);
-
-    // Inline check_material_levels (SpacetimeDB does not allow reducer-calls-reducer)
-    check_material_levels(ctx);
-
-    Ok(())
 }
 
 #[spacetimedb::reducer]
-pub fn run_simulation(ctx: &ReducerContext, parameter: String, delta_percent: f32, operator_id: String) -> Result<(), String> {
+pub fn consume_material(ctx: &ReducerContext, material_id: u32, amount_percent: f32) {
+    if let Some(mut material) = ctx.db.material().id().find(*&material_id) {
+        material.quantity_percent -= amount_percent;
+        if material.quantity_percent < 0.0 {
+            material.quantity_percent = 0.0;
+        }
+        material.last_updated = ctx.timestamp;
+        let _ = ctx.db.material().id().update(material);
+
+        // Inline check_material_levels (SpacetimeDB does not allow reducer-calls-reducer)
+        check_material_levels(ctx);
+    }
+}
+
+#[spacetimedb::reducer]
+pub fn run_simulation(ctx: &ReducerContext, parameter: String, delta_percent: f32, operator_id: String) {
     let projected_output = 100.0 + delta_percent * 0.6;
     let risk_score = delta_percent.abs() * 0.4;
     let fault_probability = risk_score / 100.0;
@@ -328,50 +316,45 @@ pub fn run_simulation(ctx: &ReducerContext, parameter: String, delta_percent: f3
         ran_by: operator_id,
         ran_at: ctx.timestamp,
     });
-
-    Ok(())
 }
 
 #[spacetimedb::reducer]
-pub fn log_energy(ctx: &ReducerContext, robot_id: u32, consumption_kw: f32, shift: String) -> Result<(), String> {
-    let robot = ctx.db.robot().id().find(*&robot_id).ok_or("Robot not found")?;
-
-    let _ = ctx.db.energy_log().insert(EnergyLog {
-        id: 0,
-        robot_id,
-        zone: robot.zone.clone(),
-        consumption_kw,
-        shift,
-        timestamp: ctx.timestamp,
-    });
-
-    if consumption_kw > 15.0 {
-        let prev_hash = get_latest_audit_hash(ctx);
-        let payload = format!("consumption_kw={}", consumption_kw);
-        let hash = compute_hash("ENERGY_ALERT", robot_id, &payload, &prev_hash);
-
-        let _ = ctx.db.audit_log().insert(AuditLog {
+pub fn log_energy(ctx: &ReducerContext, robot_id: u32, consumption_kw: f32, shift: String) {
+    if let Some(robot) = ctx.db.robot().id().find(*&robot_id) {
+        let _ = ctx.db.energy_log().insert(EnergyLog {
             id: 0,
-            event_type: "ENERGY_ALERT".to_string(),
             robot_id,
-            payload,
-            hash,
-            prev_hash,
-            operator_id: ctx.sender.to_string(),
+            zone: robot.zone.clone(),
+            consumption_kw,
+            shift,
             timestamp: ctx.timestamp,
         });
-    }
 
-    Ok(())
+        if consumption_kw > 15.0 {
+            let prev_hash = get_latest_audit_hash(ctx);
+            let payload = format!("consumption_kw={}", consumption_kw);
+            let hash = compute_hash("ENERGY_ALERT", robot_id, &payload, &prev_hash);
+
+            let _ = ctx.db.audit_log().insert(AuditLog {
+                id: 0,
+                event_type: "ENERGY_ALERT".to_string(),
+                robot_id,
+                payload,
+                hash,
+                prev_hash,
+                operator_id: ctx.sender.to_string(),
+                timestamp: ctx.timestamp,
+            });
+        }
+    }
 }
 
 #[spacetimedb::reducer]
-pub fn emergency_stop(ctx: &ReducerContext, zone: String, reason: String, operator_id: String) -> Result<(), String> {
+pub fn emergency_stop(ctx: &ReducerContext, zone: String, reason: String, operator_id: String) {
     for robot in ctx.db.robot().iter() {
         if robot.zone == zone {
             let mut updated = robot;
             updated.status = "idle".to_string();
-            let robot_id = updated.id;
             let _ = ctx.db.robot().id().update(updated);
         }
     }
@@ -389,8 +372,6 @@ pub fn emergency_stop(ctx: &ReducerContext, zone: String, reason: String, operat
         operator_id,
         timestamp: ctx.timestamp,
     });
-
-    Ok(())
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────

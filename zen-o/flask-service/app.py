@@ -167,6 +167,56 @@ def rag_query(query_text, n_results=3):
 # Run ingestion at startup
 ingest_pdfs()
 
+@app.route("/upload_pdf", methods=["POST"])
+def upload_pdf():
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part"}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+        if file and file.filename.endswith('.pdf'):
+            manuals_dir = os.path.join(os.path.dirname(__file__), "manuals")
+            os.makedirs(manuals_dir, exist_ok=True)
+            path = os.path.join(manuals_dir, file.filename)
+            file.save(path)
+            
+            # Re-ingest
+            doc = fitz.open(path)
+            new_chunks = []
+            for page_num in range(len(doc)):
+                page_text = doc[page_num].get_text()
+                if page_text.strip():
+                    new_chunks.extend(chunk_text(page_text, 300))
+            doc.close()
+            
+            if new_chunks:
+                # Embed new chunks
+                all_embeddings = []
+                batch_size = 20
+                for i in range(0, len(new_chunks), batch_size):
+                    batch = new_chunks[i:i+batch_size]
+                    embs = _ollama_embed(batch)
+                    if embs:
+                        all_embeddings.extend(embs)
+                    else:
+                        all_embeddings.extend([[0.0] * 4096] * len(batch))
+                
+                _rag_store["documents"].extend(new_chunks)
+                _rag_store["embeddings"].extend(all_embeddings)
+                for ci in range(len(new_chunks)):
+                    _rag_store["metadatas"].append({
+                         "source": file.filename,
+                         "chunk_id": f"{file.filename}_up_c{ci}"
+                    })
+                
+                return jsonify({"status": "success", "chunks_added": len(new_chunks), "total_chunks": len(_rag_store["documents"])})
+            return jsonify({"status": "success", "chunks_added": 0})
+        return jsonify({"error": "Invalid file"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # Configure Gemini (optional)
 try:
     import google.generativeai as genai
@@ -344,16 +394,32 @@ def simulate():
         vibrations = [r.get("vibration", 0) for r in current_state]
         avg_vibration = round(sum(vibrations) / len(vibrations), 4) if vibrations else 0.0
 
-        projected_output = round(100 + delta_percent * 0.6 - fault_count * 5, 2)
-        risk_score = round(abs(delta_percent) * 0.4 + avg_vibration * 20, 2)
-        fault_probability = round(min(1.0, avg_vibration + abs(delta_percent) * 0.01), 4)
+        # Ask Ollama to evaluate the risk of this simulation dynamically
+        prompt = f"""You are a factory AI evaluator. 
+Current factory state has {fault_count} faults and avg vibration {avg_vibration}g.
+An operator wants to change parameter '{parameter}' by delta {delta_percent}%.
+Based on industrial best practices, evaluate the risk and impact.
+Respond strictly in JSON format:
+{{"risk_score": <number 0-100, >60 is high risk>, "projected_output": <number around 100>, "recommendation": "<1 sentence reasoning>"}}"""
 
-        if risk_score > 60:
-            recommendation = "High risk. Reduce delta or resolve active faults first."
-        elif risk_score > 30:
-            recommendation = "Moderate risk. Monitor Zone-A robots closely."
-        else:
-            recommendation = "Low risk. Proceed with parameter change."
+        try:
+            resp = requests.post(
+                f"{OLLAMA_HOST}/api/generate",
+                json={"model": "mistral", "prompt": prompt, "format": "json", "stream": False},
+                timeout=15
+            )
+            data_ai = resp.json().get("response", "{}")
+            ai_eval = json.loads(data_ai)
+            risk_score = float(ai_eval.get("risk_score", 45.0))
+            projected_output = float(ai_eval.get("projected_output", 100 + delta_percent * 0.5))
+            recommendation = ai_eval.get("recommendation", "Consider monitoring closely.")
+        except Exception as e:
+            # Fallback
+            projected_output = round(100 + delta_percent * 0.6 - fault_count * 5, 2)
+            risk_score = round(abs(delta_percent) * 0.4 + avg_vibration * 20, 2)
+            recommendation = "AI calculation timed out. Assuming moderate risk."
+
+        fault_probability = round(min(1.0, risk_score / 100.0), 4)
 
         return jsonify({
             "parameter": parameter,

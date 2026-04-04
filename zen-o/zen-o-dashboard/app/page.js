@@ -8,8 +8,8 @@ import NavBar from "../components/NavBar";
 // Dynamic imports to avoid SSR issues with SpacetimeDB
 const RobotGrid = dynamic(() => import("../components/RobotGrid"), { ssr: false });
 const AnomalyConsole = dynamic(() => import("../components/AnomalyConsole"), { ssr: false });
-const SupplyChain = dynamic(() => import("../components/SupplyChain"), { ssr: false });
-const SimulationPanel = dynamic(() => import("../components/SimulationPanel"), { ssr: false });
+const HeatMap = dynamic(() => import("../components/HeatMap"), { ssr: false });
+const DatabaseStream = dynamic(() => import("../components/DatabaseStream"), { ssr: false });
 
 // ─── SKELETON LOADER ─────────────────────────────────────────────────
 
@@ -106,15 +106,19 @@ export default function Home() {
   return (
     <div className="bg-gray-950 text-white min-h-screen">
       <NavBar />
-      {/* Emergency stop row */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-2">
-        <div className="max-w-[1600px] mx-auto flex items-center justify-between">
-          <span className="text-xs text-gray-500 font-mono">
-            {faultCount > 0 ? `⚠ ${faultCount} fault${faultCount > 1 ? 's' : ''} detected` : '✓ All systems nominal'}
-          </span>
+        <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-gray-500 font-mono">
+              {faultCount > 0 ? `⚠ ${faultCount} fault${faultCount > 1 ? 's' : ''} detected` : '✓ All systems nominal'}
+            </span>
+            <span className="text-[10px] text-green-400 font-mono border border-green-500/30 bg-green-500/10 px-2 py-0.5 rounded-full">
+              Edge AI (No Cloud): Local Ollama RAG active. Sensitive data never leaves the building.
+            </span>
+          </div>
           <button
             onClick={() => { if (confirm('⚠ Trigger EMERGENCY STOP for all zones?')) callReducer('emergency_stop', { zone: 'all', reason: 'Manual emergency stop', operator_id: 'operator-1' }); }}
-            className="bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors uppercase tracking-wider"
+            className="bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors uppercase tracking-wider whitespace-nowrap"
           >
             ⛔ E-STOP ALL ZONES
           </button>
@@ -122,9 +126,12 @@ export default function Home() {
       </div>
 
       <main className="p-4 space-y-4 max-w-[1600px] mx-auto">
-        {/* Row 1 — Robot Fleet */}
+        {/* Row 1 — Robot Fleet & HeatMap */}
         {isConnected ? (
-          <RobotGrid />
+          <div className="space-y-4">
+            <RobotGrid />
+            <HeatMap />
+          </div>
         ) : (
           <div className="space-y-3">
             <Skeleton className="h-6 w-32" />
@@ -136,21 +143,22 @@ export default function Home() {
           </div>
         )}
 
-        {/* Row 2 — Console / Supply / Simulation */}
+        {/* Row 2 — Console & Logs */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {isConnected ? (
-            <>
+          <div className="lg:col-span-2">
+            {isConnected ? (
               <AnomalyConsole />
-              <SupplyChain />
-              <SimulationPanel />
-            </>
-          ) : (
-            <>
+            ) : (
               <Skeleton className="h-96" />
+            )}
+          </div>
+          <div className="lg:col-span-1">
+            {isConnected ? (
+              <DatabaseStream />
+            ) : (
               <Skeleton className="h-96" />
-              <Skeleton className="h-96" />
-            </>
-          )}
+            )}
+          </div>
         </div>
       </main>
 

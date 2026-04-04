@@ -25,20 +25,20 @@ function EventBadge({ type }) {
 }
 
 function formatTime(ts) {
-  const d = new Date(ts);
-  return d.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  // SpacetimeDB timestamps are typically in microseconds, convert to MS
+  const ms = ts > 2000000000000 ? ts / 1000 : ts;
+  const d = new Date(ms);
+  return (isNaN(d) ? "Inv Date" : d.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }));
 }
 
-// ─── HASH FUNCTION (must match lib/spacetime.js simpleHash) ───────────
+// ─── HASH FUNCTION (Matches Rust SHA256) ───────────
 
-function simpleHash(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(16).padStart(16, "0").slice(0, 64).padEnd(64, "0");
+async function computeSHA256(str) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 async function verifyHashChain(logs) {
@@ -47,8 +47,9 @@ async function verifyHashChain(logs) {
 
   for (let i = 0; i < sorted.length; i++) {
     const entry = sorted[i];
+    // Rust: format!("{}{}{}{}", event_type, robot_id, payload, prev_hash)
     const data = `${entry.eventType}${entry.robotId}${entry.payload}${entry.prevHash}`;
-    const computed = simpleHash(data);
+    const computed = await computeSHA256(data);
 
     if (computed !== entry.hash) {
       return { valid: false, brokenAt: i + 1, total: sorted.length };

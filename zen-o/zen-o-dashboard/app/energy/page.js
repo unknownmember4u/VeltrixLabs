@@ -11,6 +11,7 @@ const XAxis           = dynamic(() => import("recharts").then((m) => m.XAxis),  
 const YAxis           = dynamic(() => import("recharts").then((m) => m.YAxis),            { ssr: false });
 const Tooltip         = dynamic(() => import("recharts").then((m) => m.Tooltip),          { ssr: false });
 const ResponsiveContainer = dynamic(() => import("recharts").then((m) => m.ResponsiveContainer), { ssr: false });
+import { useState } from "react";
 const Cell            = dynamic(() => import("recharts").then((m) => m.Cell),              { ssr: false });
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -237,6 +238,102 @@ function OutlierAlerts({ robots, energyLogs }) {
   );
 }
 
+// ─── SECTION E — Grid Load Balancer ──────────────────────────────────────────
+
+function GridLoadBalancer({ robots }) {
+  const [gridConstrained, setGridConstrained] = useState(false);
+
+  // Normal capacity is 100kW, constrained is 40kW
+  const maxCapacity = gridConstrained ? 40 : 100;
+  
+  // High priority = Zone A (ids 1-4), Low priority = Zone B (ids 5-8)
+  const prioritized = [...robots].sort((a, b) => a.zone === "Zone-A" ? -1 : 1);
+  
+  let currentUsage = 0;
+  const assignments = prioritized.map(r => {
+    let allocated = 0;
+    let status = "NORMAL";
+    
+    // Attempt to allocate full power if system isn't at fault
+    const needed = Number(r.energyKw);
+    if (currentUsage + needed <= maxCapacity) {
+      allocated = needed;
+      currentUsage += allocated;
+    } else if (currentUsage < maxCapacity) {
+      // Partial power
+      allocated = maxCapacity - currentUsage;
+      currentUsage += allocated;
+      status = "PARTIAL";
+    } else {
+      status = "SUSPENDED";
+    }
+    
+    return { ...r, allocated, loadStatus: status };
+  });
+
+  return (
+    <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+          Grid Load Balancer
+        </h2>
+        <button 
+          onClick={() => setGridConstrained(!gridConstrained)}
+          className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${gridConstrained ? "bg-red-600 hover:bg-red-500 text-white" : "bg-gray-700 hover:bg-gray-600 text-gray-300"}`}
+        >
+          {gridConstrained ? "⚠ Reset Grid (100kW)" : "Simulate Low Power Grid (40kW)"}
+        </button>
+      </div>
+
+      {gridConstrained && (
+        <div className="mb-4 bg-red-500/10 border border-red-500/30 text-red-300 text-xs p-3 rounded-xl flex items-center justify-between">
+          <span>Grid constraint active. Total available capacity: 40 kW.</span>
+          <span className="font-mono">Priority: Zone-A &gt; Zone-B</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {assignments.map(r => (
+          <div key={r.id} className={`p-3 rounded-lg border ${r.loadStatus === 'SUSPENDED' ? 'bg-gray-900 border-red-500/30 opacity-50 grayscale' : 'bg-gray-900 border-green-500/30'}`}>
+            <div className="flex justify-between items-center mb-1">
+              <span className="font-mono text-sm text-white font-bold">{r.name}</span>
+              <span className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-400">{r.zone}</span>
+            </div>
+            
+            {r.loadStatus === 'SUSPENDED' ? (
+              <p className="text-[10px] text-red-400 mt-2 font-semibold">POWER SACRIFICED</p>
+            ) : r.loadStatus === 'PARTIAL' ? (
+              <p className="text-[10px] text-amber-400 mt-2 font-semibold flex justify-between">
+                <span>Power Restricted</span>
+                <span className="font-mono">{fmt2(r.allocated)}kW</span>
+              </p>
+            ) : (
+              <p className="text-[10px] text-green-400 mt-2 font-semibold flex justify-between">
+                <span>Operating Nominal</span>
+                <span className="font-mono">{fmt2(r.allocated)}kW</span>
+              </p>
+            )}
+            
+            {r.loadStatus === 'SUSPENDED' && (
+              <p className="text-[9px] text-gray-500 mt-1">Sacrificed for Zone-A priorities</p>
+            )}
+          </div>
+        ))}
+      </div>
+      
+      <div className="mt-3">
+        <div className="flex justify-between mb-1">
+          <span className="text-[10px] text-gray-400 uppercase">Grid Usage</span>
+          <span className="text-xs font-mono font-bold text-white">{currentUsage.toFixed(1)} / {maxCapacity.toFixed(1)} kW</span>
+        </div>
+        <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+          <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${(currentUsage/maxCapacity)*100}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
 export default function EnergyPage() {
@@ -285,6 +382,7 @@ export default function EnergyPage() {
             <ZoneMap robots={robots} />
             <RobotBarChart robots={robots} />
             <OutlierAlerts robots={robots} energyLogs={energyLogs} />
+            <GridLoadBalancer robots={robots} />
             <ShiftTable robots={robots} energyLogs={energyLogs} />
           </>
         )}

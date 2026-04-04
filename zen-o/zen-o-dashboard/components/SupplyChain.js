@@ -6,7 +6,9 @@ import { useMaterials, usePurchaseOrders, callReducer } from "../lib/spacetime";
 // ─── HELPERS ──────────────────────────────────────────────────────────
 
 function formatDateTime(ts) {
-  const d = new Date(ts);
+  const ms = ts > 2000000000000 ? ts / 1000 : ts;
+  const d = new Date(ms);
+  if (isNaN(d)) return "Invalid Date";
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
     " " + d.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" });
 }
