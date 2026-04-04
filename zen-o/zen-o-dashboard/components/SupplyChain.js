@@ -25,7 +25,7 @@ function StatusBadge({ status }) {
 // ─── MATERIAL CARD ────────────────────────────────────────────────────
 
 function MaterialCard({ material }) {
-  const pct = material.quantity_percent;
+  const pct = Number(material.quantityPercent);
   const barColor = pct < 10 ? "bg-red-500" : pct <= 25 ? "bg-amber-500" : "bg-green-500";
   const textColor = pct < 10 ? "text-red-400" : pct <= 25 ? "text-amber-400" : "text-green-400";
 
@@ -40,7 +40,7 @@ function MaterialCard({ material }) {
     <div className="bg-gray-900 rounded-xl border border-gray-700 p-4">
       <p className="text-xs text-gray-400 mb-1">{material.name}</p>
       <p className={`text-2xl font-mono font-bold mb-2 ${textColor}`}>
-        {pct.toFixed(0)}%
+        {isNaN(pct) ? "—" : pct.toFixed(0)}%
       </p>
 
       {/* Progress bar */}
@@ -104,11 +104,11 @@ export default function SupplyChain() {
           <div className="space-y-1.5 max-h-[180px] overflow-y-auto scrollbar-thin">
             {purchaseOrders.map((po) => (
               <div key={po.id} className="bg-gray-900 rounded-lg px-3 py-2 flex items-center gap-3">
-                <span className="text-xs text-white font-mono flex-shrink-0">{po.material_name}</span>
-                <span className="text-[10px] text-gray-400 font-mono">{po.quantity_kg} kg</span>
+                <span className="text-xs text-white font-mono flex-shrink-0">{po.materialName}</span>
+                <span className="text-[10px] text-gray-400 font-mono">{Number(po.quantityKg).toFixed(1)} kg</span>
                 <StatusBadge status={po.status} />
-                <span className="text-[10px] text-gray-500 font-mono ml-auto">{formatDateTime(po.created_at)}</span>
-                <span className="text-[9px] text-gray-600 font-mono">{po.supplier_code}</span>
+                <span className="text-[10px] text-gray-500 font-mono ml-auto">{formatDateTime(Number(po.createdAt))}</span>
+                <span className="text-[9px] text-gray-600 font-mono">{po.supplierCode}</span>
               </div>
             ))}
           </div>

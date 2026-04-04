@@ -1,0 +1,2 @@
+for<'a> fn(&'a ReducerContext, u32, std::string::String) -> Result<(), std::string::String> {inject_anomaly}
+for<'a> fn(&'a ReducerContext, u32, std::string::String) -> Result<(), std::string::String> {inject_anomaly}: Reducer<'_, _, _>

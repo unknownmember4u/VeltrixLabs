@@ -4,80 +4,66 @@ import json
 import base64
 import fitz  # PyMuPDF
 import requests
-try:
-    import chromadb
-    CHROMADB_AVAILABLE = True
-except Exception as e:
-    print(f"⚠ ChromaDB import failed ({e}), using in-memory fallback")
-    CHROMADB_AVAILABLE = False
+import numpy as np
 
-import google.generativeai as genai
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer
 
 # ─── CONFIG ────────────────────────────────────────────────────────────
 
 load_dotenv()
 
-FLASK_PORT = int(os.getenv("FLASK_PORT", "5001"))
-DEBUG_MODE = os.getenv("DEBUG", "false").lower() == "true"
-CHROMADB_PATH = os.getenv("CHROMADB_PATH", "./chromadb_data")
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-SPACETIMEDB_HOST = os.getenv("SPACETIMEDB_HOST", "http://localhost:3000")
+FLASK_PORT        = int(os.getenv("FLASK_PORT", "5001"))
+DEBUG_MODE        = os.getenv("DEBUG", "false").lower() == "true"
+OLLAMA_HOST       = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+SPACETIMEDB_HOST  = os.getenv("SPACETIMEDB_HOST", "http://localhost:3000")
 SPACETIMEDB_MODULE = os.getenv("SPACETIMEDB_MODULE", "stellar-state-k7z98")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEY    = os.getenv("GEMINI_API_KEY", "")
 
 app = Flask(__name__)
 CORS(app)
 
-# ─── STARTUP: PDF INGESTION + CHROMADB ─────────────────────────────────
+# ─── LIGHTWEIGHT RAG STORE (no PyTorch needed) ─────────────────────────
+# Uses Ollama's /api/embed endpoint for embeddings instead of SentenceTransformer
 
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-
-# ─── ChromaDB / In-Memory Fallback ─────────────────────────────────────
-
-# In-memory store for when ChromaDB fails
-_memory_store = {"documents": [], "embeddings": [], "ids": [], "metadatas": []}
-
-if CHROMADB_AVAILABLE:
-    try:
-        chroma_client = chromadb.Client(chromadb.Settings(
-            persist_directory=CHROMADB_PATH,
-            anonymized_telemetry=False,
-        ))
-        collection = chroma_client.get_or_create_collection(name="factory_manuals")
-        print("✓ ChromaDB initialized successfully")
-    except Exception as e:
-        print(f"⚠ ChromaDB Settings init failed ({e}), using in-memory fallback")
-        CHROMADB_AVAILABLE = False
-        collection = None
-else:
-    collection = None
-
-import numpy as np
+_rag_store = {"documents": [], "embeddings": [], "metadatas": []}
 
 
 def _cosine_sim(a, b):
-    """Cosine similarity between two vectors."""
-    a, b = np.array(a), np.array(b)
-    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-9))
+    """Cosine similarity between two numpy vectors."""
+    a, b = np.array(a, dtype=np.float32), np.array(b, dtype=np.float32)
+    dot = np.dot(a, b)
+    return float(dot / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-9))
 
 
-def memory_query(query_embedding, n_results=3):
-    """In-memory fallback for ChromaDB query using cosine similarity."""
-    if not _memory_store["embeddings"]:
-        return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
+def _ollama_embed(texts):
+    """Get embeddings from Ollama's /api/embed endpoint using nomic-embed-text or mistral."""
+    try:
+        # First try dedicated embedding model
+        resp = requests.post(f"{OLLAMA_HOST}/api/embed", json={
+            "model": "nomic-embed-text",
+            "input": texts if isinstance(texts, list) else [texts],
+        }, timeout=60)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("embeddings", [])
+    except Exception:
+        pass
 
-    scores = [_cosine_sim(query_embedding, emb) for emb in _memory_store["embeddings"]]
-    ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:n_results]
+    # Fallback: use mistral's embeddings endpoint
+    try:
+        resp = requests.post(f"{OLLAMA_HOST}/api/embed", json={
+            "model": "mistral",
+            "input": texts if isinstance(texts, list) else [texts],
+        }, timeout=60)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("embeddings", [])
+    except Exception as e:
+        print(f"⚠ Ollama embed failed: {e}")
 
-    return {
-        "documents": [[_memory_store["documents"][i] for i in ranked]],
-        "metadatas": [[_memory_store["metadatas"][i] for i in ranked]],
-        "distances": [[1 - scores[i] for i in ranked]],
-    }
+    return []
 
 
 def chunk_text(text, max_chars=300):
@@ -100,14 +86,9 @@ def chunk_text(text, max_chars=300):
 
 
 def ingest_pdfs():
-    """Scan ./manuals/ for PDFs and load into ChromaDB or memory store."""
-    if CHROMADB_AVAILABLE and collection is not None:
-        existing = collection.count()
-        if existing > 0:
-            print(f"ChromaDB already has {existing} chunks — skipping re-ingestion.")
-            return
-    elif _memory_store["documents"]:
-        print(f"Memory store already has {len(_memory_store['documents'])} chunks — skipping.")
+    """Scan ./manuals/ for PDFs and load into in-memory RAG store."""
+    if _rag_store["documents"]:
+        print(f"RAG store already has {len(_rag_store['documents'])} chunks — skipping.")
         return
 
     manuals_dir = os.path.join(os.path.dirname(__file__), "manuals")
@@ -116,7 +97,6 @@ def ingest_pdfs():
         return
 
     all_chunks = []
-    all_ids = []
     all_metadatas = []
     pdf_count = 0
 
@@ -134,47 +114,71 @@ def ingest_pdfs():
                         continue
                     page_chunks = chunk_text(page_text, 300)
                     for ci, chunk in enumerate(page_chunks):
-                        chunk_id = f"{fname}_p{page_num}_c{ci}"
                         all_chunks.append(chunk)
-                        all_ids.append(chunk_id)
                         all_metadatas.append({
                             "source": fname,
                             "page": page_num,
-                            "chunk_index": ci,
+                            "chunk_id": f"{fname}_p{page_num}_c{ci}",
                         })
                 doc.close()
             except Exception as e:
                 print(f"Error reading {fname}: {e}")
 
     if all_chunks:
-        embeddings = embedding_model.encode(all_chunks).tolist()
+        print(f"Extracted {len(all_chunks)} chunks from {pdf_count} PDFs. Embedding via Ollama...")
+        # Embed in batches
+        batch_size = 20
+        all_embeddings = []
+        for i in range(0, len(all_chunks), batch_size):
+            batch = all_chunks[i:i+batch_size]
+            embs = _ollama_embed(batch)
+            if embs:
+                all_embeddings.extend(embs)
+            else:
+                print(f"  ⚠ Batch {i//batch_size} embedding failed, using zero vectors")
+                all_embeddings.extend([[0.0] * 4096] * len(batch))
 
-        if CHROMADB_AVAILABLE and collection is not None:
-            collection.add(
-                documents=all_chunks,
-                embeddings=embeddings,
-                ids=all_ids,
-                metadatas=all_metadatas,
-            )
-            try:
-                chroma_client.persist()
-            except Exception:
-                pass  # persist() removed in newer chromadb versions
-        else:
-            _memory_store["documents"] = all_chunks
-            _memory_store["embeddings"] = embeddings
-            _memory_store["ids"] = all_ids
-            _memory_store["metadatas"] = all_metadatas
+        _rag_store["documents"] = all_chunks
+        _rag_store["embeddings"] = all_embeddings
+        _rag_store["metadatas"] = all_metadatas
+        print(f"✓ RAG store loaded: {len(all_chunks)} chunks from {pdf_count} PDFs")
+    else:
+        print(f"No text extracted from {pdf_count} PDFs.")
 
-    print(f"Loaded {pdf_count} PDFs, {len(all_chunks)} chunks into {'ChromaDB' if CHROMADB_AVAILABLE else 'memory store'}")
+
+def rag_query(query_text, n_results=3):
+    """Query the RAG store for relevant manual sections."""
+    if not _rag_store["embeddings"]:
+        return [], []
+
+    query_embs = _ollama_embed([query_text])
+    if not query_embs:
+        return [], []
+
+    q = query_embs[0]
+    scores = [_cosine_sim(q, emb) for emb in _rag_store["embeddings"]]
+    ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:n_results]
+
+    docs = [_rag_store["documents"][i] for i in ranked]
+    sources = [_rag_store["metadatas"][i]["chunk_id"] for i in ranked]
+    return docs, sources
 
 
 # Run ingestion at startup
 ingest_pdfs()
 
-# Configure Gemini
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+# Configure Gemini (optional)
+try:
+    import google.generativeai as genai
+    if GEMINI_API_KEY:
+        genai.configure(api_key=GEMINI_API_KEY)
+        GEMINI_AVAILABLE = True
+    else:
+        GEMINI_AVAILABLE = False
+except ImportError:
+    GEMINI_AVAILABLE = False
+    genai = None
+    print("⚠ google.generativeai not available — visual inspect endpoint will be limited")
 
 
 # ─── HELPER: Call SpacetimeDB reducer ──────────────────────────────────
@@ -202,41 +206,22 @@ def diagnose():
         energy_kw = data["energy_kw"]
         anomaly_type = data.get("anomaly_type", "unknown")
 
-        # Step 1: Query ChromaDB / memory store
+        # Step 1: RAG — retrieve relevant manual sections
         query_text = f"{anomaly_type} maintenance repair troubleshooting"
-        source_pages = []
-        manual_sections = ""
+        manual_sections, source_pages = rag_query(query_text, n_results=3)
 
-        has_data = False
-        if CHROMADB_AVAILABLE and collection is not None:
-            has_data = collection.count() > 0
-        else:
-            has_data = len(_memory_store["documents"]) > 0
-
-        if has_data:
-            query_embedding = embedding_model.encode([query_text]).tolist()
-            if CHROMADB_AVAILABLE and collection is not None:
-                results = collection.query(
-                    query_embeddings=query_embedding,
-                    n_results=3,
-                )
-            else:
-                results = memory_query(query_embedding[0], n_results=3)
-            if results and results["documents"] and results["documents"][0]:
-                for i, doc in enumerate(results["documents"][0]):
-                    manual_sections += f"\n{doc}\n"
-                source_pages = results.get("ids", [[]])[0] if "ids" in results else []
-        else:
-            manual_sections = "No manual data available."
+        manual_context = "\n".join(manual_sections) if manual_sections else "No manual data available."
 
         # Step 2: Build prompt
-        prompt = f"""You are a factory maintenance AI. Robot {robot_name} has an anomaly.
-Sensor readings: vibration={vibration}, temperature={temperature}°C, energy={energy_kw}kW, anomaly_type={anomaly_type}
+        prompt = f"""You are a factory maintenance AI for the ZEN-O Factory. Robot {robot_name} has an anomaly.
+Sensor readings: vibration={vibration}g RMS, temperature={temperature}°C, energy={energy_kw}kW, anomaly_type={anomaly_type}
 
-Relevant manual sections:
-{manual_sections}
+Relevant sections from the ZEN-O Maintenance Manual:
+{manual_context}
 
-Provide exactly 2 sentences: (1) the specific corrective action with any torque values or part references from the manual, (2) estimated time and priority level."""
+Based on the manual sections above, provide exactly 2 sentences:
+(1) The specific corrective action with part numbers and torque values from the manual.
+(2) Estimated repair time and priority level (P1-Critical/P2-High/P3-Medium)."""
 
         # Step 3: Call Ollama
         recommendation = ""
@@ -244,12 +229,12 @@ Provide exactly 2 sentences: (1) the specific corrective action with any torque 
             resp = requests.post(
                 f"{OLLAMA_HOST}/api/generate",
                 json={"model": "mistral", "prompt": prompt, "stream": False},
-                timeout=30,
+                timeout=120,
             )
             resp.raise_for_status()
             recommendation = resp.json().get("response", "").strip()
-        except Exception:
-            recommendation = "Manual inspection required. Check vibration dampeners and bearing assembly."
+        except Exception as e:
+            recommendation = f"[Ollama unavailable] Manual inspection required — check vibration dampeners and bearing assembly (Part# ZEN-BRG-500). Priority: P1-Critical, estimated repair 2-4 hours."
             latency_ms = round((time.time() - start) * 1000, 2)
             return jsonify({
                 "robot_id": robot_id,
@@ -257,17 +242,11 @@ Provide exactly 2 sentences: (1) the specific corrective action with any torque 
                 "source_pages": source_pages,
                 "model_used": "mistral",
                 "latency_ms": latency_ms,
-                "error": "Ollama unavailable",
+                "rag_chunks": len(manual_sections),
+                "error": f"Ollama unavailable: {e}",
             })
 
-        # Step 4: Call SpacetimeDB resolve_anomaly
-        call_spacetimedb("resolve_anomaly", {
-            "robot_id": robot_id,
-            "action_taken": recommendation,
-            "operator_id": "ai-agent",
-        })
-
-        # Step 5: Return
+        # Step 4: Return
         latency_ms = round((time.time() - start) * 1000, 2)
         return jsonify({
             "robot_id": robot_id,
@@ -275,6 +254,7 @@ Provide exactly 2 sentences: (1) the specific corrective action with any torque 
             "source_pages": source_pages,
             "model_used": "mistral",
             "latency_ms": latency_ms,
+            "rag_chunks": len(manual_sections),
         })
 
     except Exception as e:
@@ -303,32 +283,31 @@ Analyze for these specific issues only:
 Respond in this exact JSON format (no markdown, no extra text):
 {{"finding": "<one sentence description>", "severity": "<low|medium|high|critical>", "action": "<one sentence recommended action>", "confidence": "<0-100>"}}"""
 
-        try:
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            response = model.generate_content([
-                {"mime_type": "image/jpeg", "data": image_bytes},
-                prompt,
-            ])
+        finding = "Visual inspection unavailable — manual check required"
+        severity = "medium"
+        action = "Schedule manual visual inspection"
+        confidence = "0"
 
-            response_text = response.text.strip()
-            # Strip markdown fences if present
-            if response_text.startswith("```"):
-                lines = response_text.split("\n")
-                lines = [l for l in lines if not l.strip().startswith("```")]
-                response_text = "\n".join(lines).strip()
+        if GEMINI_AVAILABLE and genai:
+            try:
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                response = model.generate_content([
+                    {"mime_type": "image/jpeg", "data": image_bytes},
+                    prompt,
+                ])
+                response_text = response.text.strip()
+                if response_text.startswith("```"):
+                    lines = response_text.split("\n")
+                    lines = [l for l in lines if not l.strip().startswith("```")]
+                    response_text = "\n".join(lines).strip()
 
-            result = json.loads(response_text)
-            finding = result.get("finding", "Unknown finding")
-            severity = result.get("severity", "medium")
-            action = result.get("action", "Manual check recommended")
-            confidence = result.get("confidence", "50")
-
-        except Exception as e:
-            print(f"Gemini Vision error: {e}")
-            finding = "Visual inspection unavailable — manual check required"
-            severity = "medium"
-            action = "Schedule manual visual inspection"
-            confidence = "0"
+                result = json.loads(response_text)
+                finding = result.get("finding", finding)
+                severity = result.get("severity", severity)
+                action = result.get("action", action)
+                confidence = result.get("confidence", confidence)
+            except Exception as e:
+                print(f"Gemini Vision error: {e}")
 
         auto_flagged = severity in ("high", "critical")
         if auto_flagged:
@@ -343,7 +322,7 @@ Respond in this exact JSON format (no markdown, no extra text):
             "severity": severity,
             "action": action,
             "confidence": confidence,
-            "model_used": "gemini-1.5-flash",
+            "model_used": "gemini-1.5-flash" if GEMINI_AVAILABLE else "unavailable",
             "auto_flagged": auto_flagged,
         })
 
@@ -367,7 +346,7 @@ def simulate():
 
         projected_output = round(100 + delta_percent * 0.6 - fault_count * 5, 2)
         risk_score = round(abs(delta_percent) * 0.4 + avg_vibration * 20, 2)
-        fault_probability = round(avg_vibration + abs(delta_percent) * 0.01, 4)
+        fault_probability = round(min(1.0, avg_vibration + abs(delta_percent) * 0.01), 4)
 
         if risk_score > 60:
             recommendation = "High risk. Reduce delta or resolve active faults first."
@@ -375,13 +354,6 @@ def simulate():
             recommendation = "Moderate risk. Monitor Zone-A robots closely."
         else:
             recommendation = "Low risk. Proceed with parameter change."
-
-        # Fire-and-forget to SpacetimeDB
-        call_spacetimedb("run_simulation", {
-            "parameter": parameter,
-            "delta_percent": delta_percent,
-            "operator_id": "flask-sim",
-        })
 
         return jsonify({
             "parameter": parameter,
@@ -405,9 +377,12 @@ def health():
     try:
         # Ollama
         ollama_connected = False
+        ollama_models = []
         try:
-            resp = requests.get(OLLAMA_HOST, timeout=3)
-            ollama_connected = resp.status_code == 200
+            resp = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=3)
+            if resp.status_code == 200:
+                ollama_connected = True
+                ollama_models = [m["name"] for m in resp.json().get("models", [])]
         except Exception:
             pass
 
@@ -415,36 +390,20 @@ def health():
         spacetimedb_connected = False
         try:
             resp = requests.get(SPACETIMEDB_HOST, timeout=3)
-            spacetimedb_connected = resp.status_code == 200
+            spacetimedb_connected = True  # Any non-error response means it's running
         except Exception:
             pass
 
-        # Gemini
-        gemini_connected = False
-        try:
-            test_model = genai.GenerativeModel("gemini-1.5-flash")
-            test_model.generate_content("ping")
-            gemini_connected = True
-        except Exception:
-            pass
-
-        # ChromaDB
-        chromadb_chunks = 0
-        try:
-            if CHROMADB_AVAILABLE and collection is not None:
-                chromadb_chunks = collection.count()
-            else:
-                chromadb_chunks = len(_memory_store["documents"])
-        except Exception:
-            pass
+        # RAG status
+        rag_chunks = len(_rag_store["documents"])
 
         return jsonify({
             "status": "ok",
             "ollama_connected": ollama_connected,
+            "ollama_models": ollama_models,
             "spacetimedb_connected": spacetimedb_connected,
-            "gemini_connected": gemini_connected,
-            "chromadb_chunks": chromadb_chunks,
-            "models_available": ["mistral", "gemini-1.5-flash"],
+            "gemini_available": GEMINI_AVAILABLE,
+            "rag_chunks": rag_chunks,
         })
 
     except Exception as e:
@@ -454,4 +413,10 @@ def health():
 # ─── MAIN ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    print(f"\n╔══════════════════════════════════════════════╗")
+    print(f"║  ZEN-O AI Service                            ║")
+    print(f"║  Ollama: {OLLAMA_HOST:<30s}     ║")
+    print(f"║  RAG chunks: {len(_rag_store['documents']):<26d}     ║")
+    print(f"║  Port: {FLASK_PORT:<32d}     ║")
+    print(f"╚══════════════════════════════════════════════╝\n")
     app.run(host="0.0.0.0", port=FLASK_PORT, debug=DEBUG_MODE)

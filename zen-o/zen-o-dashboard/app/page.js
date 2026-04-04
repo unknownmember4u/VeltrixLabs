@@ -3,6 +3,7 @@
 
 import dynamic from "next/dynamic";
 import { useConnectionStatus, callReducer, useRobots } from "../lib/spacetime";
+import NavBar from "../components/NavBar";
 
 // Dynamic imports to avoid SSR issues with SpacetimeDB
 const RobotGrid = dynamic(() => import("../components/RobotGrid"), { ssr: false });
@@ -104,7 +105,21 @@ export default function Home() {
 
   return (
     <div className="bg-gray-950 text-white min-h-screen">
-      <Header status={status} latencyMs={latencyMs} faultCount={faultCount} />
+      <NavBar />
+      {/* Emergency stop row */}
+      <div className="bg-gray-900 border-b border-gray-800 px-4 py-2">
+        <div className="max-w-[1600px] mx-auto flex items-center justify-between">
+          <span className="text-xs text-gray-500 font-mono">
+            {faultCount > 0 ? `⚠ ${faultCount} fault${faultCount > 1 ? 's' : ''} detected` : '✓ All systems nominal'}
+          </span>
+          <button
+            onClick={() => { if (confirm('⚠ Trigger EMERGENCY STOP for all zones?')) callReducer('emergency_stop', { zone: 'all', reason: 'Manual emergency stop', operator_id: 'operator-1' }); }}
+            className="bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors uppercase tracking-wider"
+          >
+            ⛔ E-STOP ALL ZONES
+          </button>
+        </div>
+      </div>
 
       <main className="p-4 space-y-4 max-w-[1600px] mx-auto">
         {/* Row 1 — Robot Fleet */}

@@ -1,0 +1,2 @@
+for<'a> fn(&'a ReducerContext, std::string::String, std::string::String, std::string::String) -> Result<(), std::string::String> {emergency_stop}
+for<'a> fn(&'a ReducerContext, std::string::String, std::string::String, std::string::String) -> Result<(), std::string::String> {emergency_stop}: Reducer<'_, _, _>

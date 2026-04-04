@@ -70,9 +70,9 @@ function RobotModal({ robot, onClose }) {
         body: JSON.stringify({
           robot_id: robot.id,
           robot_name: robot.name,
-          vibration: robot.vibration,
-          temperature: robot.temperature,
-          energy_kw: robot.energy_kw,
+          vibration: Number(robot.vibration),
+          temperature: Number(robot.temperature),
+          energy_kw: Number(robot.energyKw),
           anomaly_type: "vibration_fault",
         }),
       });
@@ -112,19 +112,19 @@ function RobotModal({ robot, onClose }) {
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="bg-gray-900 rounded-lg p-3 text-center">
             <p className="text-[10px] text-gray-400 uppercase">Temp</p>
-            <p className={`text-lg font-mono font-bold ${robot.temperature > 85 ? "text-red-400" : robot.temperature > 70 ? "text-amber-400" : "text-green-400"}`}>
-              {robot.temperature.toFixed(1)}°C
+            <p className={`text-lg font-mono font-bold ${Number(robot.temperature) > 85 ? "text-red-400" : Number(robot.temperature) > 70 ? "text-amber-400" : "text-green-400"}`}>
+              {Number(robot.temperature).toFixed(1)}°C
             </p>
           </div>
           <div className="bg-gray-900 rounded-lg p-3 text-center">
             <p className="text-[10px] text-gray-400 uppercase">Vibration</p>
-            <p className={`text-lg font-mono font-bold ${robot.vibration > 0.8 ? "text-red-400" : robot.vibration > 0.6 ? "text-amber-400" : "text-green-400"}`}>
-              {robot.vibration.toFixed(2)}
+            <p className={`text-lg font-mono font-bold ${Number(robot.vibration) > 0.8 ? "text-red-400" : Number(robot.vibration) > 0.6 ? "text-amber-400" : "text-green-400"}`}>
+              {Number(robot.vibration).toFixed(2)}
             </p>
           </div>
           <div className="bg-gray-900 rounded-lg p-3 text-center">
             <p className="text-[10px] text-gray-400 uppercase">Energy</p>
-            <p className="text-lg font-mono font-bold text-white">⚡ {robot.energy_kw} kW</p>
+            <p className="text-lg font-mono font-bold text-white">⚡ {Number(robot.energyKw).toFixed(1)} kW</p>
           </div>
         </div>
 
@@ -189,7 +189,7 @@ function RobotModal({ robot, onClose }) {
               {robot.status === "active" ? "🟢 Operating normally" : "⏸ Robot is idle"}
             </p>
             <p className="text-[10px] text-gray-600 mt-1">
-              Last updated: {new Date(robot.last_updated).toLocaleTimeString()}
+              Last updated: {new Date(Number(robot.lastUpdated)).toLocaleTimeString()}
             </p>
           </div>
         )}
@@ -226,19 +226,19 @@ function RobotCard({ robot, onClick }) {
       {/* Temperature */}
       <div className="mb-2">
         <p className="text-[10px] text-gray-500 uppercase mb-1">Temperature</p>
-        <TempBar temp={robot.temperature} />
+        <TempBar temp={Number(robot.temperature)} />
       </div>
 
       {/* Vibration */}
       <div className="mb-2">
         <p className="text-[10px] text-gray-500 uppercase mb-1">Vibration</p>
-        <VibrationBar value={robot.vibration} />
+        <VibrationBar value={Number(robot.vibration)} />
       </div>
 
       {/* Energy */}
       <div className="flex items-center gap-1.5">
         <span className="text-amber-400 text-sm">⚡</span>
-        <span className="font-mono text-sm text-white">{robot.energy_kw}</span>
+        <span className="font-mono text-sm text-white">{Number(robot.energyKw).toFixed(1)}</span>
         <span className="text-[10px] text-gray-500">kW</span>
       </div>
     </div>

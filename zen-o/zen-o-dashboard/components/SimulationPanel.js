@@ -45,13 +45,22 @@ export default function SimulationPanel() {
     setError(null);
     setResult(null);
     try {
+      const robotsPlain = robots.map((r) => ({
+        id: r.id,
+        name: r.name,
+        zone: r.zone,
+        status: r.status,
+        temperature: r.temperature,
+        vibration: r.vibration,
+        energy_kw: r.energyKw,
+      }));
       const res = await fetch("http://localhost:5001/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           parameter,
           delta_percent: deltaPercent,
-          current_state_json: robots,
+          current_state_json: robotsPlain,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -132,30 +141,30 @@ export default function SimulationPanel() {
             <span className="text-[10px] text-gray-400 uppercase">Projected Output</span>
             <div className="flex items-center gap-1">
               <span className={`text-lg font-mono font-bold ${
-                result.projected_output >= 100 ? "text-green-400" : "text-red-400"
+                Number(result.projected_output) >= 100 ? "text-green-400" : "text-red-400"
               }`}>
-                {result.projected_output.toFixed(1)}
+                {Number(result.projected_output).toFixed(1)}
               </span>
-              <span className={`text-sm ${result.projected_output >= 100 ? "text-green-400" : "text-red-400"}`}>
-                {result.projected_output >= 100 ? "↑" : "↓"}
+              <span className={`text-sm ${Number(result.projected_output) >= 100 ? "text-green-400" : "text-red-400"}`}>
+                {Number(result.projected_output) >= 100 ? "↑" : "↓"}
               </span>
             </div>
           </div>
 
           {/* Risk */}
-          <RiskGauge score={result.risk_score} />
+          <RiskGauge score={Number(result.risk_score)} />
 
           {/* Fault Probability */}
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-gray-400 uppercase">Fault Probability</span>
-            <span className="text-xs font-mono text-white">{(result.fault_probability * 100).toFixed(1)}%</span>
+            <span className="text-xs font-mono text-white">{(Number(result.fault_probability) * 100).toFixed(1)}%</span>
           </div>
 
           {/* Recommendation */}
           <div className={`rounded-lg p-2 text-xs border ${
-            result.risk_score > 60
+            Number(result.risk_score) > 60
               ? "bg-red-500/10 border-red-500/30 text-red-300"
-              : result.risk_score > 30
+              : Number(result.risk_score) > 30
               ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
               : "bg-green-500/10 border-green-500/30 text-green-300"
           }`}>
@@ -191,12 +200,12 @@ export default function SimulationPanel() {
                 {simHistory.map((s) => (
                   <tr key={s.id} className="border-t border-gray-700/50">
                     <td className="py-1 px-1 truncate max-w-[80px]">{s.parameter}</td>
-                    <td className={`py-1 px-1 text-right ${s.delta_percent > 0 ? "text-green-400" : "text-red-400"}`}>
-                      {s.delta_percent > 0 ? "+" : ""}{s.delta_percent}
+                    <td className={`py-1 px-1 text-right ${Number(s.deltaPercent) > 0 ? "text-green-400" : "text-red-400"}`}>
+                      {Number(s.deltaPercent) > 0 ? "+" : ""}{Number(s.deltaPercent)}
                     </td>
-                    <td className="py-1 px-1 text-right">{s.projected_output.toFixed(0)}</td>
-                    <td className="py-1 px-1 text-right">{s.risk_score.toFixed(0)}</td>
-                    <td className="py-1 px-1 text-right text-gray-500">{formatTime(s.ran_at)}</td>
+                    <td className="py-1 px-1 text-right">{Number(s.projectedOutput).toFixed(0)}</td>
+                    <td className="py-1 px-1 text-right">{Number(s.riskScore).toFixed(0)}</td>
+                    <td className="py-1 px-1 text-right text-gray-500">{formatTime(s.ranAt)}</td>
                   </tr>
                 ))}
               </tbody>

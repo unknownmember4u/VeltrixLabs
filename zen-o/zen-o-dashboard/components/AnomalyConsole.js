@@ -47,7 +47,7 @@ async function verifyHashChain(logs) {
 
   for (let i = 0; i < sorted.length; i++) {
     const entry = sorted[i];
-    const data = `${entry.event_type}${entry.robot_id}${entry.payload}${entry.prev_hash}`;
+    const data = `${entry.eventType}${entry.robotId}${entry.payload}${entry.prevHash}`;
     const computed = simpleHash(data);
 
     if (computed !== entry.hash) {
@@ -113,9 +113,9 @@ export default function AnomalyConsole() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <EventBadge type={log.event_type} />
-                      {log.robot_id > 0 && (
-                        <span className="text-[9px] text-gray-500 font-mono">ARM-{String(log.robot_id).padStart(2, "0")}</span>
+                      <EventBadge type={log.eventType} />
+                      {Number(log.robotId) > 0 && (
+                        <span className="text-[9px] text-gray-500 font-mono">ARM-{String(log.robotId).padStart(2, "0")}</span>
                       )}
                     </div>
                     <p className="text-xs text-gray-300 truncate" title={log.payload}>

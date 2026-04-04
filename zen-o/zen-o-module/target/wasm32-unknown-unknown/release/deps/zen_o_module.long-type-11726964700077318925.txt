@@ -1,0 +1,2 @@
+for<'a> fn(&'a ReducerContext, u32, f32, f32, f32) -> Result<(), std::string::String> {update_robot_sensor}
+for<'a> fn(&'a ReducerContext, u32, f32, f32, f32) -> Result<(), std::string::String> {update_robot_sensor}: Reducer<'_, _, _>
