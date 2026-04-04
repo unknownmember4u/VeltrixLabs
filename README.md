@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/HackByte_4.0-VeltrixLabs-blue?style=for-the-badge&logo=hackthebox&logoColor=white" />
 </p>
 
-<h1 align="center">🏭 ZEN-O — Smart Factory Orchestrator</h1>
+<h1 align="center">Steller State — Smart Factory Orchestrator</h1>
 
 <p align="center">
   <b>Real-Time Industrial IoT Monitoring · AI-Powered Diagnostics · Autonomous Supply Chain</b>
@@ -37,7 +37,7 @@
 
 ## Overview
 
-**ZEN-O** is a full-stack industrial IoT orchestrator built for **HackByte 4.0**. It simulates a smart factory with 8 robotic arms across two production zones, providing real-time monitoring, AI-driven anomaly detection, predictive simulation, and autonomous supply chain management — all connected through a **SpacetimeDB** real-time database backbone.
+**STELLER STATE** is a full-stack industrial IoT orchestrator built for **HackByte 4.0**. It simulates a smart factory with 8 robotic arms across two production zones, providing real-time monitoring, AI-driven anomaly detection, predictive simulation, and autonomous supply chain management — all connected through a **SpacetimeDB** real-time database backbone.
 
 The system demonstrates how modern factories can leverage **edge AI** (Ollama), **real-time databases** (SpacetimeDB), and **3D visualization** (Three.js) to achieve full observability and autonomous decision-making without cloud dependency.
 
@@ -47,7 +47,7 @@ The system demonstrates how modern factories can leverage **edge AI** (Ollama), 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        ZEN-O ARCHITECTURE                          │
+│                        ARCHITECTURE                                 │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  ┌──────────────┐    WebSocket     ┌──────────────────────────┐    │
