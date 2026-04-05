@@ -4,19 +4,11 @@
 
 <h1 align="center">Steller State — Smart Factory Orchestrator</h1>
 
-<p align="center">
-  <video src="https://res.cloudinary.com/dktectkkk/video/upload/q_auto/f_auto/v1775367046/demo1_hzhxiu.mp4"
-         controls
-         autoplay
-         loop
-         muted
-         width="800">
-  </video>
-</p>
+## Demo
 
 <p align="center">
-  <a href="https://res.cloudinary.com/dktectkkk/video/upload/q_auto/f_auto/v1775367046/demo1_hzhxiu.mp4">
-    <img src="https://img.shields.io/badge/Watch_Demo-blue?style=for-the-badge" />
+  <a href="https://drive.google.com/drive/folders/1yCDu1q48dgtfZLkvvAjPSQN4tVvXO93z?usp=drive_link" target="_blank">
+    <img src="https://img.shields.io/badge/Open_Demo_Folder-black?style=for-the-badge" />
   </a>
 </p>
 
