@@ -424,6 +424,29 @@ function SimPanel({ label, preset, robots, onResult }) {
     }
   }, [preset]);
 
+  // Deterministic fallback when AI is unavailable or times out
+  const computeFallback = (delta, robotList) => {
+    const absDelta = Math.abs(delta);
+    const faultCount = robotList.filter(r => r.status === "fault").length;
+    const vibs = robotList.map(r => Number(r.vibration || 0));
+    const avgVib = vibs.length ? vibs.reduce((a,b) => a+b, 0) / vibs.length : 0;
+    const baseRisk = Math.pow(absDelta, 1.6) * 0.06;
+    const riskScore = Math.min(98, baseRisk + avgVib * 25 + faultCount * 12);
+    const outputShift = delta * 0.55 - Math.pow(absDelta, 1.3) * 0.02;
+    const projectedOutput = 100 + outputShift - faultCount * 4;
+    let rec;
+    if (absDelta > 35) rec = `High variance (${delta > 0 ? '+' : ''}${delta}%) exceeds safe envelope. Gradual ramp recommended.`;
+    else if (absDelta > 20) rec = `Moderate variance (${delta > 0 ? '+' : ''}${delta}%) — monitor thermal and vibration systems.`;
+    else rec = `Low variance (${delta > 0 ? '+' : ''}${delta}%) within acceptable limits. Standard monitoring sufficient.`;
+    return {
+      parameter, delta_percent: delta,
+      projected_output: Math.round(projectedOutput * 100) / 100,
+      risk_score: Math.round(riskScore * 100) / 100,
+      fault_probability: Math.round(Math.min(1, riskScore / 100) * 10000) / 10000,
+      recommendation: rec, fault_count: faultCount, avg_vibration: avgVib,
+    };
+  };
+
   const handleRun = async () => {
     setLoading(true);
     setError(null);
@@ -433,18 +456,27 @@ function SimPanel({ label, preset, robots, onResult }) {
         id: r.id, name: r.name, zone: r.zone, status: r.status,
         temperature: r.temperature, vibration: r.vibration, energy_kw: r.energyKw,
       }));
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000);
+
       const res = await fetch(`${FLASK_URL}/simulate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ parameter, delta_percent: deltaPercent, current_state_json: robotsPlain }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setResult(data);
       onResult(data);
     } catch (err) {
-      setError(err.message || "Simulation failed");
-      onResult(null);
+      const fallback = computeFallback(deltaPercent, robots);
+      setResult(fallback);
+      onResult(fallback);
+      setError(err.name === "AbortError" ? "AI timed out — using physics projection" : "AI unavailable — using physics projection");
     } finally {
       setLoading(false);
     }
@@ -513,10 +545,33 @@ function SimPanel({ label, preset, robots, onResult }) {
 
 // ─── RISK CURVE CHART ─────────────────────────────────────────────────────────
 
-function RiskCurve() {
-  const data = Array.from({ length: 11 }, (_, i) => {
+function RiskCurve({ resultA, resultB }) {
+  const baseData = Array.from({ length: 11 }, (_, i) => {
     const delta = -50 + i * 10;
-    return { delta, projected_output: 100 + delta * 0.6, risk_score: Math.abs(delta) * 0.4 };
+    return { 
+      delta, 
+      projected_output: 100 + delta * 0.6, 
+      risk_score: Math.abs(delta) * 0.4 
+    };
+  });
+
+  const data = baseData.map(point => {
+    const entry = { ...point };
+    if (resultA) {
+      const rd = Math.round(resultA.delta_percent / 10) * 10;
+      if (rd === point.delta) {
+        entry.simA_output = resultA.projected_output;
+        entry.simA_risk = resultA.risk_score;
+      }
+    }
+    if (resultB) {
+      const rd = Math.round(resultB.delta_percent / 10) * 10;
+      if (rd === point.delta) {
+        entry.simB_output = resultB.projected_output;
+        entry.simB_risk = resultB.risk_score;
+      }
+    }
+    return entry;
   });
 
   return (
@@ -532,8 +587,12 @@ function RiskCurve() {
           <XAxis dataKey="delta" tick={{ fontSize: 10 }} />
           <YAxis tick={{ fontSize: 10 }} />
           <Tooltip />
-          <Line dataKey="projected_output" stroke="#2563eb" strokeWidth={2} dot={false} />
-          <Line dataKey="risk_score" stroke="#d97706" strokeWidth={2} dot={false} />
+          <Line dataKey="projected_output" name="Theoretical Output" stroke="#2563eb" strokeWidth={2} dot={false} opacity={0.6} />
+          <Line dataKey="risk_score" name="Theoretical Risk" stroke="#d97706" strokeWidth={2} dot={false} opacity={0.6} />
+          {resultA && <Line dataKey="simA_output" name="Sim A Output" stroke="#2563eb" strokeWidth={0} activeDot={{ r: 8 }} dot={{ r: 6, strokeWidth: 2, fill: '#fff' }} connectNulls={false} />}
+          {resultA && <Line dataKey="simA_risk" name="Sim A Risk" stroke="#d97706" strokeWidth={0} activeDot={{ r: 8 }} dot={{ r: 6, strokeWidth: 2, fill: '#fff' }} connectNulls={false} />}
+          {resultB && <Line dataKey="simB_output" name="Sim B Output" stroke="#7c3aed" strokeWidth={0} activeDot={{ r: 8 }} dot={{ r: 6, strokeWidth: 2, fill: '#fff' }} connectNulls={false} />}
+          {resultB && <Line dataKey="simB_risk" name="Sim B Risk" stroke="#db2777" strokeWidth={0} activeDot={{ r: 8 }} dot={{ r: 6, strokeWidth: 2, fill: '#fff' }} connectNulls={false} />}
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -696,7 +755,7 @@ export default function SimulationPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-           <div className="lg:col-span-2"><RiskCurve /></div>
+           <div className="lg:col-span-2"><RiskCurve resultA={resultA} resultB={resultB} /></div>
            <div className="lg:col-span-1"><SimHistory sims={sims} /></div>
         </div>
 

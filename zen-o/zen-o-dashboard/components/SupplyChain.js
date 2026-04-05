@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useMaterials, usePurchaseOrders } from "../lib/spacetime";
-import { AlertTriangle, ShoppingBag, Play, Pause, RotateCcw, Bell, Truck, Hash, Package, TrendingDown } from "lucide-react";
+import { AlertTriangle, ShoppingBag, Play, Pause, RotateCcw, Bell, Truck, Hash, Package, TrendingDown, BellRing, X } from "lucide-react";
 
 // ─── HELPERS ──────────────────────────────────────────────────────────
 
@@ -158,6 +158,7 @@ export default function SupplyChain() {
   const notified10Ref = useRef({});
   const [localOrders, setLocalOrders] = useState([]);
   const intervalRef = useRef(null);
+  const [hazardOpen, setHazardOpen] = useState(false);
 
   const addNotification = useCallback((type, message) => {
     const time = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -248,6 +249,92 @@ export default function SupplyChain() {
 
   return (
     <div className="space-y-4">
+
+      {/* ─── HAZARD NOTIFICATION BOX ──────────────────────────────── */}
+      {notifications.length > 0 && (
+        <div className={`rounded-2xl border-2 overflow-hidden transition-all duration-500 ${
+          notifications.some(n => n.type === "critical")
+            ? "border-red-300 bg-gradient-to-r from-red-50 to-orange-50 shadow-[0_0_25px_rgba(239,68,68,0.12)]"
+            : "border-amber-300 bg-gradient-to-r from-amber-50 to-yellow-50 shadow-[0_0_20px_rgba(245,158,11,0.1)]"
+        }`}>
+          {/* Clickable Header */}
+          <button
+            onClick={() => setHazardOpen(!hazardOpen)}
+            className="w-full flex items-center justify-between px-6 py-4 cursor-pointer group"
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-xl ${notifications.some(n => n.type === "critical") ? "bg-red-100" : "bg-amber-100"}`}>
+                <BellRing className={`w-5 h-5 ${notifications.some(n => n.type === "critical") ? "text-red-600 animate-pulse" : "text-amber-600"}`} />
+              </div>
+              <div className="text-left">
+                <h4 className={`text-sm font-bold ${notifications.some(n => n.type === "critical") ? "text-red-800" : "text-amber-800"}`}>
+                  Supply Chain Hazard Alerts
+                </h4>
+                <p className="text-[10px] text-gray-500 font-medium">
+                  {notifications.filter(n => n.type === "critical").length} critical · {notifications.filter(n => n.type === "warning").length} warnings
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {notifications.some(n => n.type === "critical") && (
+                <span className="text-[9px] bg-red-600 text-white px-2.5 py-1 rounded-full font-black tracking-widest animate-pulse">
+                  AI AUTO-ORDERED
+                </span>
+              )}
+              <div className={`flex items-center gap-1.5 bg-white/80 px-3 py-1.5 rounded-lg border ${
+                notifications.some(n => n.type === "critical") ? "border-red-200" : "border-amber-200"
+              }`}>
+                <span className="text-[10px] font-bold text-gray-600">{notifications.length} alert{notifications.length !== 1 ? "s" : ""}</span>
+                <svg className={`w-3 h-3 text-gray-400 transition-transform duration-300 ${hazardOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+          </button>
+
+          {/* Expandable Alert List */}
+          <div className={`transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden ${hazardOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"}`}>
+            <div className="px-6 pb-5 space-y-2.5 max-h-[400px] overflow-y-auto">
+              {notifications.map((alert, i) => (
+                <div
+                  key={i}
+                  className={`flex items-start gap-3 px-4 py-3 rounded-xl border transition-all ${
+                    alert.type === "critical"
+                      ? "bg-white border-red-200 shadow-sm"
+                      : alert.type === "warning" ? "bg-white/80 border-amber-100" : "bg-white/80 border-blue-100"
+                  }`}
+                >
+                  <div className={`mt-0.5 p-1 rounded-lg flex-shrink-0 ${
+                    alert.type === "critical" ? "bg-red-100" : alert.type === "warning" ? "bg-amber-100" : "bg-blue-100"
+                  }`}>
+                    {alert.type === "critical"
+                      ? <Truck className="w-3.5 h-3.5 text-red-600" />
+                      : alert.type === "warning" ? <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> : <Bell className="w-3.5 h-3.5 text-blue-600" />
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-semibold leading-relaxed ${
+                      alert.type === "critical" ? "text-red-800" : alert.type === "warning" ? "text-amber-800" : "text-blue-800"
+                    }`}>
+                      {alert.message}
+                    </p>
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <span className="text-[9px] text-gray-400 font-mono">{alert.time}</span>
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold tracking-wider border ${
+                        alert.type === "critical"
+                          ? "bg-red-50 text-red-600 border-red-200"
+                          : alert.type === "warning" ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-blue-50 text-blue-600 border-blue-200"
+                      }`}>
+                        {alert.type === "critical" ? "CRITICAL" : alert.type === "warning" ? "WARNING" : "INFO"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header + Controls */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
         <div className="flex items-center justify-between mb-4">
