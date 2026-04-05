@@ -4,13 +4,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useConnectionStatus, useRobots } from "../lib/spacetime";
-import { LayoutDashboard, BatteryMedium, FlaskConical, Truck } from "lucide-react";
+import { LayoutDashboard, BatteryMedium, FlaskConical, Truck, Eye } from "lucide-react";
 
 const NAV_LINKS = [
   { href: "/",           label: "Dashboard", icon: LayoutDashboard },
   { href: "/energy",     label: "Energy", icon: BatteryMedium },
   { href: "/simulation", label: "Simulation Lab", icon: FlaskConical },
   { href: "/supply",     label: "Supply Chain", icon: Truck },
+  { href: "/vision",     label: "Vision Monitoring", icon: Eye },
 ];
 
 export default function NavBar() {

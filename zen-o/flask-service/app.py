@@ -6,7 +6,11 @@ import fitz  # PyMuPDF
 import requests
 import numpy as np
 
-from flask import Flask, request, jsonify
+import hashlib
+import threading
+import cv2
+
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -666,6 +670,183 @@ def health():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+# ─── ENDPOINT 6: VISION MONITORING (Helmet Detection) ─────────────────
+
+# Globals for vision system
+_vision_active = False
+_vision_lock = threading.Lock()
+_vision_violations = []  # List of violation dicts
+_vision_model = None
+_vision_cap = None
+_latest_frame = None
+_CLASS_NAMES = ['helmet', 'head', 'person']
+
+ML_MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "ML", "output", "best.pt")
+
+def _compute_violation_hash(data_str):
+    return hashlib.sha256(data_str.encode()).hexdigest()[:16]
+
+def _load_vision_model():
+    global _vision_model
+    if _vision_model is not None:
+        return _vision_model
+    try:
+        from ultralytics import YOLO
+        if os.path.exists(ML_MODEL_PATH):
+            _vision_model = YOLO(ML_MODEL_PATH)
+            print(f"✓ Vision model loaded from {ML_MODEL_PATH}")
+        else:
+            print(f"⚠ Vision model not found at {ML_MODEL_PATH}")
+    except ImportError:
+        print("⚠ ultralytics not installed — vision monitoring disabled")
+    return _vision_model
+
+def _vision_loop():
+    """Background thread that reads camera frames, runs YOLO, and stores results."""
+    global _vision_active, _vision_cap, _latest_frame, _vision_violations
+
+    model = _load_vision_model()
+    if model is None:
+        _vision_active = False
+        return
+
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        cap = cv2.VideoCapture(1)
+    if not cap.isOpened():
+        print("⚠ Could not open camera for vision monitoring")
+        _vision_active = False
+        return
+
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    _vision_cap = cap
+    prev_time = time.time()
+
+    while _vision_active:
+        ret, frame = cap.read()
+        if not ret:
+            time.sleep(0.05)
+            continue
+
+        results = model(frame, verbose=False)[0]
+        helmet_count, head_count, person_count = 0, 0, 0
+
+        for det in results.boxes.data.tolist():
+            x1, y1, x2, y2, score, class_id = det
+            class_id = int(class_id)
+            if score < 0.45: continue
+
+            if class_id == 0:
+                helmet_count += 1
+                color = (0, 200, 0)
+            elif class_id == 1:
+                head_count += 1
+                color = (0, 0, 255)
+            elif class_id == 2:
+                person_count += 1
+                color = (255, 180, 0)
+            else:
+                color = (255, 255, 255)
+
+            label = _CLASS_NAMES[class_id] if class_id < len(_CLASS_NAMES) else f"cls_{class_id}"
+            label_text = f"{label.upper()} {score:.2f}"
+            cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            (tw, th), _ = cv2.getTextSize(label_text, font, 0.6, 2)
+            cv2.rectangle(frame, (int(x1), int(y1) - th - 8), (int(x1) + tw + 4, int(y1)), color, -1)
+            cv2.putText(frame, label_text, (int(x1) + 2, int(y1) - 4), font, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+
+        curr_time = time.time()
+        fps = 1.0 / (curr_time - prev_time) if (curr_time - prev_time) > 0 else 0
+        prev_time = curr_time
+
+        h, w = frame.shape[:2]
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (0, 0), (w, 60), (30, 30, 30), -1)
+        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+        cv2.putText(frame, "ZEN-O SAFETY HELMET DETECTION", (10, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(frame, f"FPS: {fps:.0f}", (w - 110, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(frame, f"Helmets: {helmet_count}", (10, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 0), 2, cv2.LINE_AA)
+        cv2.putText(frame, f"No Helmet: {head_count}", (180, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2, cv2.LINE_AA)
+        cv2.putText(frame, f"Persons: {person_count}", (380, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 180, 0), 2, cv2.LINE_AA)
+
+        if head_count > 0:
+            banner_y = h - 40
+            cv2.rectangle(frame, (0, banner_y), (w, h), (0, 0, 200), -1)
+            warning_text = f"WARNING: {head_count} WORKER(S) WITHOUT HELMET!"
+            (tw2, _), _ = cv2.getTextSize(warning_text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+            cv2.putText(frame, warning_text, ((w - tw2) // 2, banner_y + 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
+
+            ts = time.time()
+            v_hash = _compute_violation_hash(f"VIOLATION_{head_count}_{ts}")
+            with _vision_lock:
+                should_log = True
+                if _vision_violations:
+                    last_ts = _vision_violations[0].get("timestamp", 0)
+                    if ts - last_ts < 5: should_log = False
+                if should_log:
+                    _vision_violations.insert(0, {
+                        "id": len(_vision_violations) + 1,
+                        "timestamp": ts,
+                        "time_str": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)),
+                        "head_count": head_count, "helmet_count": helmet_count, "person_count": person_count,
+                        "hash": v_hash,
+                        "severity": "critical" if head_count >= 3 else "high" if head_count >= 2 else "medium",
+                    })
+                    if len(_vision_violations) > 100: _vision_violations = _vision_violations[:100]
+
+        _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+        with _vision_lock: _latest_frame = jpeg.tobytes()
+        time.sleep(0.03)
+
+    cap.release()
+    _vision_cap = None
+    print("Vision monitoring stopped.")
+
+def _generate_mjpeg():
+    while _vision_active:
+        with _vision_lock: frame = _latest_frame
+        if frame is None:
+            time.sleep(0.05)
+            continue
+        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        time.sleep(0.033)
+
+@app.route("/vision/start", methods=["POST"])
+def vision_start():
+    global _vision_active
+    if _vision_active: return jsonify({"status": "already_running"})
+    _vision_active = True
+    threading.Thread(target=_vision_loop, daemon=True).start()
+    return jsonify({"status": "started"})
+
+@app.route("/vision/stop", methods=["POST"])
+def vision_stop():
+    global _vision_active
+    _vision_active = False
+    return jsonify({"status": "stopped"})
+
+@app.route("/vision/feed")
+def vision_feed():
+    if not _vision_active: return "Monitoring not active", 503
+    return Response(_generate_mjpeg(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route("/vision/violations")
+def vision_violations():
+    with _vision_lock:
+        return jsonify({"active": _vision_active, "violations": _vision_violations[:50], "total": len(_vision_violations)})
+
+@app.route("/vision/status")
+def vision_status():
+    return jsonify({
+        "active": _vision_active,
+        "model_exists": os.path.exists(ML_MODEL_PATH),
+        "model_loaded": _vision_model is not None,
+        "total_violations": len(_vision_violations),
+    })
 
 # ─── MAIN ──────────────────────────────────────────────────────────────
 
